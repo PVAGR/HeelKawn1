@@ -80,7 +80,7 @@ func _mark_components_dirty(reason: String, detail: Dictionary = {}) -> void:
 	_components_dirty_reason = reason
 	_components_dirty_detail = detail.duplicate(true)
 	_components_dirty_tick = GameManager.tick_count if GameManager != null else -1
-	if OS.is_debug_build():
+	if OS.is_debug_build() and not Engine.is_editor_hint():
 		var stack = get_stack()
 		_components_dirty_callsite = "%s:%d" % [stack[1].source, stack[1].line] if stack.size() > 1 else "unknown"
 	var count = _dirty_reason_counts.get(reason, 0)
@@ -98,6 +98,38 @@ var total_paths_solved: int = 0
 var historic_paths_solved_total: int = 0
 var plain_paths_solved_total: int = 0
 var _path_solve_counter_tick: int = -1
+
+# --- PERFORMANCE PASS 2: aggregate pathfinding profiler (windowed, printed periodically) ---
+var _pf_requests: int = 0
+var _pf_cache_hits: int = 0
+var _pf_cache_misses: int = 0
+var _pf_find_calls: int = 0
+var _pf_hist_calls: int = 0
+var _pf_adjacent_calls: int = 0
+var _pf_component_queries: int = 0
+var _pf_passable_queries: int = 0
+var _pf_failed_paths: int = 0
+var _pf_unreach_rejected: int = 0
+var _pf_total_us: int = 0
+var _pf_worst_us: int = 0
+var _pf_worst_info: String = ""
+var _pf_last_print_tick: int = -1
+const PF_PRINT_INTERVAL: int = 600
+
+func _pf_maybe_print() -> void:
+	if TickProfiler == null or not TickProfiler.is_enabled():
+		return
+	var t: int = GameManager.tick_count if GameManager != null else -1
+	if _pf_last_print_tick >= 0 and t - _pf_last_print_tick < PF_PRINT_INTERVAL:
+		return
+	_pf_last_print_tick = t
+	var avg: float = 0.0
+	if _pf_find_calls > 0:
+		avg = float(_pf_total_us) / float(_pf_find_calls)
+	print("[PATH_PROFILE] requests=%d cache_hits=%d cache_misses=%d find_path_calls=%d hist_calls=%d adjacent_calls=%d component_queries=%d passable_queries=%d failed_paths=%d unreachable_rejected=%d total_ms=%.1f avg_ms=%.3f worst_ms=%.1f worst=%s" % [
+		_pf_requests, _pf_cache_hits, _pf_cache_misses, _pf_find_calls, _pf_hist_calls, _pf_adjacent_calls, _pf_component_queries, _pf_passable_queries, _pf_failed_paths, _pf_unreach_rejected,
+		float(_pf_total_us) / 1000.0, avg / 1000.0, float(_pf_worst_us) / 1000.0, _pf_worst_info
+	])
 
 
 func _init() -> void:
@@ -252,13 +284,25 @@ func _refresh_one_tile(x: int, y: int, data: WorldData) -> bool:
 ##   - goal is solid,
 ##   - no path exists.
 func find_path(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
+	_pf_requests += 1
 	var cache_key: String = _path_cache_key(start, goal, &"plain")
 	if _path_cache.has(cache_key):
+		_pf_cache_hits += 1
 		path_cache_hits += 1
 		return _duplicate_path(_path_cache[cache_key])
+	_pf_cache_misses += 1
 	path_cache_misses += 1
+	var _pf_enabled: bool = TickProfiler != null and TickProfiler.is_enabled()
+	var t0: int = Time.get_ticks_usec() if _pf_enabled else 0
 	var out: Array[Vector2i] = _find_path_uncached(start, goal, &"plain")
+	var el: int = (Time.get_ticks_usec() - t0) if _pf_enabled else 0
+	_pf_find_calls += 1
+	_pf_total_us += el
+	if el > _pf_worst_us:
+		_pf_worst_us = el
+		_pf_worst_info = "plain start=%s goal=%s len=%d" % [start, goal, out.size()]
 	_store_path_cache(cache_key, out)
+	_pf_maybe_print()
 	return _duplicate_path(out)
 
 
@@ -272,10 +316,12 @@ func _find_path_uncached(start: Vector2i, goal: Vector2i, mode: StringName = &"p
 		return out
 	# Fast reject: different components means no hope of a path.
 	if component_of(start) != component_of(goal):
+		_pf_unreach_rejected += 1
 		return out
 	_record_path_solve(mode)
 	var packed: PackedVector2Array = _astar.get_id_path(start, goal)
 	if packed.size() <= 1:
+		_pf_failed_paths += 1
 		return out
 	for i in range(1, packed.size()):
 		out.append(Vector2i(packed[i]))
@@ -285,16 +331,47 @@ func _find_path_uncached(start: Vector2i, goal: Vector2i, mode: StringName = &"p
 ## Same as find_path, but pawns get higher move costs through WorldPersistence
 ## "scarred" map regions. Deterministic; no writes to persistence. Does not change
 ## passability; only A* point weight scales (see refresh_pawn_historic_scar_weights).
+func _hist_cache_key(start: Vector2i, goal: Vector2i) -> String:
+	# Includes _last_refresh_tick so a history (scar/road/myth) recompute
+	# invalidates cached historic paths and forces a recompute with new weights.
+	return "h:%d:%d:%d:%d:%d:%d" % [_nav_version, _last_refresh_tick, start.x, start.y, goal.x, goal.y]
+
 func find_path_pawn_historic_aversion(start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
-	for idx in _pawn_hist_dirty:
-		var p: Vector2i = _idx_to_point(idx)
-		if _astar.region.has_point(p):
-			_astar.set_point_weight_scale(p, _pawn_hist_scale[idx])
+	_pf_requests += 1
+	var hkey: String = _hist_cache_key(start, goal)
+	if _path_cache.has(hkey):
+		_pf_cache_hits += 1
+		path_cache_hits += 1
+		return _duplicate_path(_path_cache[hkey])
+	_pf_cache_misses += 1
+	path_cache_misses += 1
+	var _pf_enabled: bool = TickProfiler != null and TickProfiler.is_enabled()
+	var t0: int = Time.get_ticks_usec() if _pf_enabled else 0
+	# PERF PASS 2: when there is no history (scar/road/myth/remnant) the weight
+	# scale is uniformly 1.0, so applying+resetting it is a pure no-op that
+	# nonetheless scales with the (eventually huge) dirty list on mature worlds.
+	# Skip it entirely in that case.
+	var has_hist: bool = not _pawn_hist_dirty.is_empty()
+	if has_hist:
+		for idx in _pawn_hist_dirty:
+			var p: Vector2i = _idx_to_point(idx)
+			if _astar.region.has_point(p):
+				_astar.set_point_weight_scale(p, _pawn_hist_scale[idx])
 	var out: Array[Vector2i] = _find_path_uncached(start, goal, &"historic")
-	for idx2 in _pawn_hist_dirty:
-		var p2: Vector2i = _idx_to_point(idx2)
-		if _astar.region.has_point(p2):
-			_astar.set_point_weight_scale(p2, 1.0)
+	if has_hist:
+		for idx2 in _pawn_hist_dirty:
+			var p2: Vector2i = _idx_to_point(idx2)
+			if _astar.region.has_point(p2):
+				_astar.set_point_weight_scale(p2, 1.0)
+	var el: int = (Time.get_ticks_usec() - t0) if _pf_enabled else 0
+	_pf_hist_calls += 1
+	_pf_find_calls += 1
+	_pf_total_us += el
+	if el > _pf_worst_us:
+		_pf_worst_us = el
+		_pf_worst_info = "historic start=%s goal=%s dirty=%d len=%d" % [start, goal, _pawn_hist_dirty.size(), out.size()]
+	_store_path_cache(hkey, out)
+	_pf_maybe_print()
 	return out
 
 
@@ -463,6 +540,7 @@ func _duplicate_path(path: Array) -> Array[Vector2i]:
 ## an impassable target (e.g. an ore vein on a mountain). Returns (-1,-1)
 ## if the tile is surrounded by impassable terrain.
 func find_adjacent_passable(tile: Vector2i) -> Vector2i:
+	_pf_adjacent_calls += 1
 	for offset in NEIGHBOR_OFFSETS:
 		var t: Vector2i = tile + offset
 		if not _astar.region.has_point(t):
@@ -473,6 +551,7 @@ func find_adjacent_passable(tile: Vector2i) -> Vector2i:
 
 
 func is_passable(tile: Vector2i) -> bool:
+	_pf_passable_queries += 1
 	if not _astar.region.has_point(tile):
 		return false
 	return not _astar.is_point_solid(tile)
@@ -480,6 +559,7 @@ func is_passable(tile: Vector2i) -> bool:
 
 ## Component id for a tile, or -1 if tile is impassable / out of bounds.
 func component_of(tile: Vector2i) -> int:
+	_pf_component_queries += 1
 	if tile.x < 0 or tile.x >= WorldData.WIDTH or tile.y < 0 or tile.y >= WorldData.HEIGHT:
 		return -1
 	return _component_id[tile.y * WorldData.WIDTH + tile.x]
@@ -615,9 +695,6 @@ func _recompute_largest_component() -> void:
 ## bridges -- shows up in the component map. Otherwise pawns would happily
 ## try to path through a wall they just built.
 func _compute_components(data: WorldData) -> void:
-	var stack = get_stack()
-	if stack.size() > 2:
-		print("[PF_STACK] flusher=", stack[1].source, ":", stack[1].line, " -> ", stack[2].source, ":", stack[2].line, " (dirty setter not shown)")
 	_component_id.resize(WorldData.TILE_COUNT)
 	for i in range(_component_id.size()):
 		_component_id[i] = -1

@@ -867,6 +867,11 @@ func _on_world_tick(tick: int) -> void:
 
 
 func _world_ai_interval_for_speed() -> int:
+	var speed_idx: int = TickManager.get_speed_index() if TickManager != null else 0
+	if speed_idx >= 4:  # 100x, 200x
+		return 40
+	elif speed_idx >= 2:  # 26x+
+		return 20
 	return 10
 
 
@@ -875,6 +880,13 @@ func _settlement_ai_interval_for_speed() -> int:
 
 
 func _agent_update_budget_for_speed(total_agents: int) -> int:
+	# At high speeds, process a fraction per call to avoid frame spikes.
+	# The cadence (update_frequency=3) already limits call rate.
+	var speed_idx: int = TickManager.get_speed_index() if TickManager != null else 0
+	if speed_idx >= 4:  # 100x, 200x
+		return mini(total_agents, 8)
+	elif speed_idx >= 3:  # 50x
+		return mini(total_agents, 16)
 	return total_agents
 
 func _spawn_initial_agents() -> void:

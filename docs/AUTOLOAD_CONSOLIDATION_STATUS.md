@@ -1,8 +1,67 @@
 # Autoload Consolidation Status
 
-**Date:** 2026-05-22  
-**Status:** Phase 1 + Phase 2 safe removals done: 9 autoloads deregistered  
-**Autoload Count:** 141 (from 150, 9 deregistered in Phases 1–2, 11 consolidated managers created, 24 removed from project.godot total)
+**Date:** 2026-08-17  
+**Status:** Phase 1 + Phase 2 + Aug 17 tick forwarding done: 12 autoloads deregistered  
+**Autoload Count:** 140 (from 150, 12 deregistered total, 11 consolidated managers created, tick forwarding added to 8 managers)
+
+---
+
+## Aug 17, 2026 — Tick Forwarding + 3 Removals
+
+### Added tick forwarding to 8 consolidated managers
+
+Each manager now connects to `GameManager.game_tick` and forwards tick events to child subsystems via `_forward_tick_to_children`. This enables safe removal of standalone autoload registrations.
+
+| Manager | Tick Forwarding Added |
+|---|---|
+| MemoryManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| FactionManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| PawnManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| SocialManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| UIManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| EventManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| PlayerManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+| ObserverManager | `_forward_tick_to_children` → children with `_on_game_tick` |
+
+### Removed 3 autoload registrations from project.godot
+
+| Autoload | Parent Manager | Direct Refs | Reason |
+|---|---|---|---|
+| HeelKawnUIManager | UIManager | 0 | Clean — loaded as UIManager child |
+| UILayoutManager | UIManager | 0 | Clean — loaded as UIManager child |
+| PawnMoodUI | UIManager | 0 | Clean (test only) — loaded as UIManager child |
+
+### Remaining child subsystems still registered as standalone autoloads
+
+25 child subsystems remain as standalone autoloads because they have direct references in code that would need migration:
+
+| Autoload | Parent Manager | Direct Refs | Priority |
+|---|---|---|---|
+| HeelKawnianManager | PawnManager | 54 | HIGH — largest ref count |
+| ObservationAPI | ObserverManager | 39 | HIGH |
+| PawnConsciousness | PawnManager | 36 | HIGH |
+| EgregoreMemory | (no parent) | 36 | HIGH — needs new manager |
+| CulturalMemory | (no parent) | 38 | HIGH — needs new manager |
+| CulturalStyleManager | (no parent) | 6 | MEDIUM — needs new manager |
+| PlayerIntentQueue | PlayerManager | 26 | MEDIUM |
+| KinshipSystem | SocialManager | 12 | MEDIUM |
+| RoadMemory | MemoryManager | 12 | MEDIUM |
+| FogOfDiscovery | ObserverManager | 8 | MEDIUM |
+| IncarnationManager | PlayerManager | 9 | MEDIUM |
+| DynastyFamilySystem | (no parent) | 4 | LOW — needs new manager |
+| LegacySystem | SocialManager | 7 | LOW |
+| AgeMemory | MemoryManager | 7 | LOW |
+| RemnantMemory | MemoryManager | 7 | LOW |
+| TradeMemory | EconomyManager | 7 | LOW |
+| PawnChatterBubbles | UIManager | 2 | LOW |
+| FactionSystem | FactionManager | 1 | LOW |
+| AuthoritySystem | FactionManager | 2 | LOW |
+| PlayerBuilding | PlayerManager | 6 | LOW (path lookups) |
+| PlayerGathering | PlayerManager | 8 | LOW (path lookups) |
+| EventNotificationOverlay | UIManager | 4 | LOW (path lookups) |
+| HeelKawnianMind | PawnManager | 5 | LOW |
+| WorldEventSystem | EventManager | 5 | LOW |
+| LegacySystem | SocialManager | 7 | LOW |
 
 ---
 
@@ -205,23 +264,32 @@ The following files also have references to removed autoloads that need updating
 
 ## Next Steps
 
-1. **Phase 3: Manager-driven Consolidations** — Move remaining autoloads into existing consolidated managers (SettlementMemory, FactionRegistry, TradePlanner, RoadMemory, RemnantMemory, MythMemory, SacredMemory, IntentMemory, AgeMemory, BloodlineSystem → MemoryManager / FactionManager / SocialManager / EconomyManager)
-2. **Phase 4: Core Thin Wrappers** — Evaluate remaining ~50 thin wrappers (<150 LOC) for consolidation potential
-3. **Test game launch** - Verify the game launches without errors after all updates
-4. **Performance testing** - Measure startup time and memory usage improvements
+1. **Phase 3: Reference Migration** — Migrate direct references for the 25 remaining child subsystems still registered as standalone autoloads. Start with CLEAN subsystems (0 refs), then LOW (1-7 refs), then MEDIUM (8-15 refs). HIGH (16+ refs) needs careful planning.
+2. **Phase 3b: New Managers** — Create managers for orphaned systems: DynastyFamilySystem, EgregoreMemory, CulturalMemory, CulturalStyleManager
+3. **Phase 4: Core Thin Wrappers** — Evaluate remaining ~50 thin wrappers (<150 LOC) for consolidation potential
+4. **Test game launch** - Verify the game launches without errors after all updates
+5. **Performance testing** - Measure startup time, tick time, and memory usage improvements
 
 ---
 
 ## Expected Results
 
-**Before:**
-- 164 autoloads
-- Slow startup
-- High memory usage
-- Complex dependencies
+**Before (Aug 14, 2026):**
+- 144 autoloads
+- 100+ tick handlers firing per game_tick
+- Duplicate tick handlers for consolidated child subsystems
+- Slow startup, high memory usage
 
-**After (when complete):**
+**Current (Aug 17, 2026):**
+- 140 autoloads (12 deregistered total)
+- 8 managers with tick forwarding for children
+- 3 duplicate registrations removed
+- Lag reduction: CharacterProgressionSystem, SurvivalSystem, EcologySystem optimized
+
+**Target (when complete):**
 - ~40 autoloads (target)
+- All child subsystems loaded only via managers
+- No duplicate tick handlers
 - Startup, memory, and architecture improvements TBD — not yet measured
 
 ---

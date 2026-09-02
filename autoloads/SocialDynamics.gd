@@ -25,6 +25,8 @@ const ALLIANCE_THRESHOLD: float = 0.5
 const CACHE_TTL_TICKS: int = 600
 
 var _relationships: Dictionary = {}
+# OPTIMIZATION: adjacency index — pawn_id → Array[String] of relationship keys
+var _by_pawn: Dictionary = {}
 var _last_decay_tick: int = -999999
 var _last_vendetta_decay_tick: int = -999999
 var _social_health_cache: Dictionary = {}
@@ -68,13 +70,16 @@ func _on_pawn_death(payload: Dictionary) -> void:
 	var pid: int = int(payload.get("pawn_id", -1))
 	if pid < 0:
 		return
+	# OPTIMIZATION: use adjacency index for O(degree) instead of O(R) full scan
 	var keys_to_remove: Array[String] = []
-	for key in _relationships.keys():
-		var rel: Dictionary = _relationships[key]
-		if int(rel.get("pawn_a", -1)) == pid or int(rel.get("pawn_b", -1)) == pid:
-			keys_to_remove.append(key)
+	if _by_pawn.has(pid):
+		keys_to_remove.assign(_by_pawn[pid])
 	for k in keys_to_remove:
+		var rel: Dictionary = _relationships.get(k, {})
+		if not rel.is_empty():
+			_index_remove(k, int(rel.get("pawn_a", -1)), int(rel.get("pawn_b", -1)))
 		_relationships.erase(k)
+	_by_pawn.erase(pid)
 	if not keys_to_remove.is_empty():
 		var gm := get_node_or_null("/root/GossipManager")
 		if gm != null and gm.has_method("generate_gossip_event"):
@@ -90,8 +95,14 @@ func _on_pawn_move(payload: Dictionary) -> void:
 	if old_settlement < 0 or new_settlement < 0 or old_settlement == new_settlement:
 		return
 	var tick: int = int(payload.get("tick", 0))
-	for key in _relationships.keys():
-		var rel: Dictionary = _relationships[key]
+	# OPTIMIZATION: use adjacency index for O(degree) instead of O(R) full scan
+	var rel_keys: Array[String] = []
+	if _by_pawn.has(pid):
+		rel_keys.assign(_by_pawn[pid])
+	for key in rel_keys:
+		var rel: Dictionary = _relationships.get(key, {})
+		if rel.is_empty():
+			continue
 		var other: int = int(rel.get("pawn_a", -1))
 		if other == pid:
 			other = int(rel.get("pawn_b", -1))
@@ -118,6 +129,25 @@ func get_or_create_key(a: int, b: int) -> String:
 	var hi: int = maxi(a, b)
 	return "%d,%d" % [lo, hi]
 
+# OPTIMIZATION: adjacency index helpers
+func _index_add(key: String, pawn_id: int) -> void:
+	if not _by_pawn.has(pawn_id):
+		_by_pawn[pawn_id] = []
+	var arr: Array = _by_pawn[pawn_id]
+	if key not in arr:
+		arr.append(key)
+
+func _index_remove(key: String, pawn_a: int, pawn_b: int) -> void:
+	_index_remove_from(pawn_a, key)
+	_index_remove_from(pawn_b, key)
+
+func _index_remove_from(pawn_id: int, key: String) -> void:
+	if _by_pawn.has(pawn_id):
+		var arr: Array = _by_pawn[pawn_id]
+		arr.erase(key)
+		if arr.is_empty():
+			_by_pawn.erase(pawn_id)
+
 func add_interaction(pawn_a: int, pawn_b: int, bond: String, delta: float, tick: int, reason: String = "") -> void:
 	if pawn_a == pawn_b:
 		return
@@ -126,6 +156,8 @@ func add_interaction(pawn_a: int, pawn_b: int, bond: String, delta: float, tick:
 	var key: String = get_or_create_key(pawn_a, pawn_b)
 	if not _relationships.has(key):
 		_relationships[key] = _new_relationship(pawn_a, pawn_b, tick)
+		_index_add(key, pawn_a)
+		_index_add(key, pawn_b)
 	var rel: Dictionary = _relationships[key]
 	var allowed: bool = true
 	var new_val: float = rel.get(bond, 0.0)
@@ -265,11 +297,19 @@ func get_bond_tier(a: int, b: int) -> int:
 	return get_relationship(a, b).get("bond_tier", 0)
 
 func get_all_relationships_for(pawn_id: int) -> Array[Dictionary]:
+	# OPTIMIZATION: use adjacency index for O(degree) instead of O(R) full scan
+	if _by_pawn.has(pawn_id):
+		var out: Array[Dictionary] = []
+		for key in _by_pawn[pawn_id]:
+			if _relationships.has(key):
+				out.append(_relationships[key])
+		return out
+	# Fallback for missing index (shouldn't happen after index is built)
 	var out: Array[Dictionary] = []
 	for key in _relationships.keys():
 		var rel: Dictionary = _relationships[key]
 		if int(rel.get("pawn_a", -1)) == pawn_id or int(rel.get("pawn_b", -1)) == pawn_id:
-			out.append(rel.duplicate(true))
+			out.append(rel)
 	return out
 
 func get_relationships_of_bond(pawn_id: int, bond: String, min_val: float = 0.0) -> Array[Dictionary]:
@@ -497,6 +537,7 @@ func _get_settlement_pawn_count(settlement_id: int) -> int:
 
 func clear() -> void:
 	_relationships.clear()
+	_by_pawn.clear()  # OPTIMIZATION: clear adjacency index
 	_last_decay_tick = -999999
 	_last_vendetta_decay_tick = -999999
 	_social_health_cache.clear()
@@ -548,6 +589,10 @@ func load_state(state: Dictionary) -> void:
 	clear()
 	if state.has("relationships"):
 		_relationships = state["relationships"].duplicate(true)
+		for key in _relationships:
+			var rel: Dictionary = _relationships[key]
+			_index_add(key, int(rel.get("pawn_a", -1)))
+			_index_add(key, int(rel.get("pawn_b", -1)))
 	if state.has("last_decay_tick"):
 		_last_decay_tick = int(state["last_decay_tick"])
 	if state.has("last_vendetta_decay_tick"):

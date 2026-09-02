@@ -51,9 +51,6 @@ var conflict_history: Array[Dictionary] = []
 ## Peace treaties: active agreements
 var peace_treaties: Array[Dictionary] = []
 
-func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
-
 func _on_game_tick(tick: int) -> void:
 	if GameManager.periodic_phase_due(tick, AUTHORITY_DECAY_INTERVAL_TICKS, AUTHORITY_DECAY_PHASE_OFFSET_TICKS):
 		_decay_authority()

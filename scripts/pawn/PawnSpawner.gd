@@ -79,6 +79,11 @@ var _pawn_by_id: Dictionary = {}
 var _pawn_by_id_dirty: bool = true
 var _next_pawn_id: int = 1
 
+# OPTIMIZATION: tick-stamped alive pawn cache — single allocation per tick
+var _alive_pawns_cache: Array[HeelKawnian] = []
+var _alive_pawns_cache_tick: int = -1
+var _alive_pawns_count_cache: int = 0
+
 ## Return the cached pawn registry. This is the preferred way to iterate all pawns
 ## instead of get_nodes_in_group("pawns"), which traverses the entire scene tree.
 ## The array is maintained on spawn/death — no per-tick allocation.
@@ -95,12 +100,17 @@ func get_pawns() -> Array[HeelKawnian]:
 
 
 func get_alive_pawns() -> Array[HeelKawnian]:
+	var current_tick: int = GameManager.tick_count if GameManager != null else -1
+	if _alive_pawns_cache_tick == current_tick and not _alive_pawns_cache.is_empty():
+		return _alive_pawns_cache
 	_prune_invalid_pawns()
-	var alive: Array[HeelKawnian] = []
+	_alive_pawns_cache.clear()
 	for p in pawns:
 		if p != null and is_instance_valid(p) and p.data != null and not bool(p.data.is_dead):
-			alive.append(p)
-	return alive
+			_alive_pawns_cache.append(p)
+	_alive_pawns_cache_tick = current_tick
+	_alive_pawns_count_cache = _alive_pawns_cache.size()
+	return _alive_pawns_cache
 
 
 ## OPTIMIZATION: Get pawn by ID in O(1) time
@@ -120,6 +130,15 @@ func _rebuild_pawn_dict() -> void:
 ## OPTIMIZATION: Mark pawn dict as dirty (call when pawns spawn/despawn)
 func invalidate_pawn_dict() -> void:
 	_pawn_by_id_dirty = true
+	_alive_pawns_cache_tick = -1  # invalidate alive cache too
+
+## OPTIMIZATION: Get alive pawn count without allocating an array
+func alive_pawn_count() -> int:
+	var current_tick: int = GameManager.tick_count if GameManager != null else -1
+	if _alive_pawns_cache_tick == current_tick:
+		return _alive_pawns_count_cache
+	get_alive_pawns()
+	return _alive_pawns_count_cache
 
 
 func _prune_invalid_pawns() -> void:
@@ -204,6 +223,7 @@ func clear_pawns() -> void:
 				SpatialManager.unregister_entity(int(p.data.id))
 			p.queue_free()
 	pawns.clear()
+	invalidate_pawn_dict()
 
 
 ## Remove a pawn from the spawner (when it dies). Cleans up the reference.
@@ -220,9 +240,9 @@ func remove_pawn(pawn: HeelKawnian) -> void:
 func pawn_data_for_id(pid: int) -> HeelKawnianData:
 	if pid < 0:
 		return null
-	for p in pawns:
-		if p != null and is_instance_valid(p) and p.data != null and p.data.id == pid:
-			return p.data
+	var pawn: HeelKawnian = get_pawn_by_id(pid)
+	if pawn != null and pawn.data != null:
+		return pawn.data
 	return null
 
 
@@ -422,7 +442,13 @@ func spawn_generational_pawn(
 		if tradition_v is Dictionary:
 			var tradition: Dictionary = tradition_v as Dictionary
 			naming_convention = str(tradition.get("naming_convention", "nordic")).to_lower()
-			taboo_jobs = (tradition.get("taboo_jobs", []) as Array).duplicate(true)
+			var taboo_raw: Variant = tradition.get("taboo_jobs", [])
+			if taboo_raw is Array:
+				taboo_jobs = taboo_raw.duplicate(true)
+			elif taboo_raw is String:
+				taboo_jobs = [taboo_raw]
+			else:
+				taboo_jobs = []
 			preferred_branch = str(tradition.get("preferred_tech_branch", "")).to_lower()
 	# DEAD BRAIN REVIVED: NameGenerator for birth names with culture awareness
 	if NameGenerator != null:
@@ -970,6 +996,7 @@ func spawn_migrant(world: World) -> HeelKawnian:
 	pawn.data = pawn_data
 	pawn.position = world.tile_to_world(spawn_tile)
 	pawns.append(pawn)
+	invalidate_pawn_dict()
 	add_child(pawn)
 	# Record migration event
 	WorldMemory.record_event({

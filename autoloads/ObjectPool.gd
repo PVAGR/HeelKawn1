@@ -102,7 +102,7 @@ func register_pool(pool_name: String, scene: PackedScene, parent: Node = null, m
 	if parent == null:
 		parent = self
 	
-	pools[pool_name] = ObjectPool.new(scene, parent, max_size)
+	pools[pool_name] = PoolData.new(scene, parent, max_size)
 	stats.total_pools += 1
 	
 	if OS.is_debug_build():
@@ -110,7 +110,7 @@ func register_pool(pool_name: String, scene: PackedScene, parent: Node = null, m
 
 
 ## Get a pool by name (creates if doesn't exist)
-func get_pool(pool_name: String) -> ObjectPool:
+func get_pool(pool_name: String) -> PoolData:
 	if not pools.has(pool_name):
 		push_error("ObjectPool: Pool '%s' not registered! Call register_pool() first." % pool_name)
 		return null
@@ -178,7 +178,7 @@ func clear_all() -> void:
 func _count_total_objects() -> int:
 	var total: int = 0
 	for pool_name in pools:
-		var pool: ObjectPool = pools[pool_name]
+		var pool: PoolData = pools[pool_name]
 		total += pool.available.size() + pool.in_use.size()
 	return total
 

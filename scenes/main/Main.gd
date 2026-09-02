@@ -234,6 +234,11 @@ var _realm_view_panel: Control = null
 const SELECT_PICK_RADIUS_PX: float = 16.0
 var _kill_count: int = 0
 var _resource_balance_audit_last_sig: String = ""
+## Playtest no-save. When set, this process must not write any production world
+## save (autosave, F5 manual save, slot saves, ironman auto-save). Derived once
+## from the command line; normal launches leave it false. Diagnostic F10 file
+## writes (snapshot/bundle/diagnostics) are NOT world saves and remain allowed.
+var _save_writes_disabled_for_playtest: bool = false
 
 # -------------------- selection --------------------
 ## Currently selected pawn (right-side info panel). null = nothing selected.
@@ -662,6 +667,11 @@ func _cycle_realm_crown_max_settlements() -> void:
 
 func _ready() -> void:
 	CrashTrap.enter_system("Main._ready")
+	_save_writes_disabled_for_playtest = _compute_save_writes_disabled()
+	if _save_writes_disabled_for_playtest:
+		print("[PLAYTEST] SAVE WRITES DISABLED")
+	else:
+		print("[PLAYTEST] SAVE WRITES ENABLED")
 	var simulation_worker: bool = _is_simulation_worker_mode()
 	if not simulation_worker:
 		SettlementMemory.print_validation_smoketest_from_main()
@@ -3034,7 +3044,11 @@ func _on_game_tick(tick: int) -> void:
 		var eco_events: Array = EcologySystem.get_pending_events()
 		for evt in eco_events:
 			if evt.get("type") == "wildfire":
-				ChronicleLog.log_event("wildfire", {"tick": tick, "fires": evt.get("total_active", 0), "reason": "wildfire spread"})
+				ChronicleLog.append_entry(
+						tick,
+						"world",
+						"A wildfire rages across the wilderness, %d fires burning." % int(evt.get("total_active", 0)),
+						PackedStringArray(["wildfire"]))
 	# Ecology: settlement pollution tracking
 	if EcologySystem != null and _is_main_lane_tick(tick, 1000, 73):
 		if SettlementMemory != null:
@@ -3343,7 +3357,7 @@ func _on_game_tick(tick: int) -> void:
 		_refresh_spatial_profile_overlay()
 	
 	# Auto-save every 6000 ticks (~10 in-game days at 1x)
-	if tick > 0 and tick % 6000 == 0:
+	if not _save_writes_disabled_for_playtest and tick > 0 and tick % 6000 == 0:
 		var snapshot: Dictionary = _build_save_dict()
 		var err: Error = GameSave.write_file(GameSave.DEFAULT_PATH.trim_suffix(".sav") + "_autosave.sav", snapshot)
 		if err == OK and OS.is_debug_build():
@@ -4311,8 +4325,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	# When the F10 creator menu is open, number keys are used for report labels.
 	# Ignore global gameplay hotkeys so menu interaction never changes sim speed.
+	# However, we must allow F10 to pass through so the menu can be closed.
 	if _creator_debug_menu != null and _creator_debug_menu.visible:
-		return
+		if event.keycode >= Key.KEY_0 and event.keycode <= Key.KEY_9:
+			return
+		# Let F10 through to close menu
+		if event.keycode == Key.KEY_F10:
+			pass  # Fall through to handle F10
+		else:
+			return
 	# ESC toggles settings panel (takes priority over other hotkeys)
 	if event.keycode == Key.KEY_ESCAPE:
 		if _settings_panel != null:
@@ -7224,6 +7245,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	elif _budget_speed >= 100.0: budget_usec = 4000
 	elif _budget_speed >= 50.0: budget_usec = 8000
 	elif _budget_speed >= 26.0: budget_usec = 12000
+	else: budget_usec = 12000
 	var start_usec: int = Time.get_ticks_usec()
 
 	# Determine settlement context: formal, proto, or bootstrap
@@ -9412,7 +9434,35 @@ func _print_stockpile() -> void:
 # the editor Remote Inspector on the Main node when you need a quick encoding check without
 # applying load (full F5→F8 smoke test remains manual in-editor).
 
+## Canonical playtest no-save predicate. True when the command line contains
+## `--playtest-no-save`. Godot splits user args at a literal `--`, so the token
+## may appear in either `get_cmdline_user_args()` or `get_cmdline_args()`.
+func _compute_save_writes_disabled() -> bool:
+	# Explicit force-disable always wins.
+	if _cmdline_has_flag("--playtest-no-save"):
+		return true
+	# Explicit allow overrides the debug default.
+	if _cmdline_has_flag("--allow-save-writes"):
+		return false
+	# DEBUG development builds default to save-safe: normal world saves are
+	# fenced unless explicitly allowed. RELEASE builds behave normally.
+	return OS.is_debug_build()
+
+
+func _cmdline_has_flag(flag: String) -> bool:
+	for a in OS.get_cmdline_user_args():
+		if str(a) == flag:
+			return true
+	for a in OS.get_cmdline_args():
+		if str(a) == flag:
+			return true
+	return false
+
+
 func _colony_save() -> void:
+	if _save_writes_disabled_for_playtest:
+		print("[Main] Save skipped (save writes disabled)")
+		return
 	var snapshot: Dictionary = _build_save_dict()
 	if OS.is_debug_build():
 		if not verify_save_roundtrip(snapshot):
@@ -9473,6 +9523,9 @@ func _on_structure_type_selected(type: String) -> void:
 
 
 func _on_save_slot(slot: int) -> void:
+	if _save_writes_disabled_for_playtest:
+		print("[Main] Save slot %d skipped (save writes disabled)" % slot)
+		return
 	var snapshot: Dictionary = _build_save_dict()
 	var err: Error = GameSave.write_file(GameSave.get_save_path(slot), snapshot)
 	if err == OK:

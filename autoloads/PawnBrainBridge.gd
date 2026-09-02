@@ -8,11 +8,6 @@ var _brains: Dictionary = {}
 var _last_tick: int = -1
 var _GameManager = null
 
-func _ready() -> void:
-	_GameManager = get_node_or_null("/root/GameManager")
-	if _GameManager != null:
-		_GameManager.game_tick.connect(_on_game_tick)
-
 func _on_game_tick(tick: int) -> void:
 	if tick - _last_tick < TICK_INTERVAL:
 		return

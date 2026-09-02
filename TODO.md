@@ -16,6 +16,23 @@
 - [x] Update `docs/HEELKAWN_STATE.md` with current stabilization state
 - [x] Update `TODO.md` priority order
 
+### 1b. Lag Reduction + Autoload Consolidation (DONE Aug 17)
+- [x] Fix CharacterProgressionSystem double-execution (achievements every tick → every 500 ticks)
+- [x] Throttle SurvivalSystem (find_alive_pawns every tick → every 3 ticks)
+- [x] Optimize EcologySystem (doubled 65K-tile intervals, double-buffer pollution)
+- [x] Add tick forwarding to 8 consolidated managers
+- [x] Remove 3 duplicate autoload registrations (HeelKawnUIManager, UILayoutManager, PawnMoodUI)
+- [x] Static quality gate: PASS
+
+### 1c. Deep Profiling + O(P²) Elimination (DONE Aug 17)
+- [x] PawnSpawner: tick-stamped alive_pawns cache (51+ allocations/tick → 1)
+- [x] HeelKawnian: awareness scan O(P²) → O(P) cached list
+- [x] SocialDynamics: adjacency index (O(R) → O(degree) per pawn query)
+- [x] ColonySimServices: single-pass pawn collector (8× O(P) → 1× O(P))
+- [x] AIAgentManager: agent keys dirty flag (eliminate alloc+sort every 3 ticks)
+- [x] WorldAI: world_events cap at 2048 + pawn count cache
+- [x] Static quality gate: PASS
+
 ### 2. Runtime Truth Pass (REQUIRES GODOT)
 - [ ] Run in Godot editor/headless, verify all F10 diagnostic panels render without errors
 - [ ] Confirm OnboardingSystem RichTextLabel fix holds at runtime

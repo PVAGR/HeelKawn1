@@ -134,6 +134,9 @@ var _last_expensive_signature: String = ""
 var _expensive_dirty: bool = true
 var _last_gear_signature: String = ""
 var _last_portrait_signature: String = ""
+## Cached PawnSpawner reference — avoids a full scene-tree scan per lookup.
+var _cached_spawner: PawnSpawner = null
+var _cached_spawner_tick: int = -1
 
 
 func _ready() -> void:
@@ -438,8 +441,10 @@ func _populate_needs_tab() -> void:
 
 func _populate_matrix_tab() -> void:
 	_matrix_inputs_label = RichTextLabel.new()
-	# bbcode_enabled disabled for runtime stability
-	# _matrix_inputs_label.bbcode_enabled = true
+	## BBCode must be ON: the matrix/neural/narrative text is authored with
+	## [b]/[i]/[color] tags (2C: the selector showed raw tags — the tags were
+	## always there, this flag was simply left off).
+	_matrix_inputs_label.bbcode_enabled = true
 	_matrix_inputs_label.fit_content = true
 	_matrix_inputs_label.scroll_active = true
 	_matrix_inputs_label.custom_minimum_size = Vector2(0, 220)
@@ -453,8 +458,7 @@ func _populate_neural_tab() -> void:
 	_tab_neural.add_child(_neural_bias_label)
 
 	_neural_outputs_label = RichTextLabel.new()
-	# bbcode_enabled disabled for runtime stability
-	# _neural_outputs_label.bbcode_enabled = true
+	_neural_outputs_label.bbcode_enabled = true
 	_neural_outputs_label.fit_content = true
 	_neural_outputs_label.scroll_active = true
 	_neural_outputs_label.custom_minimum_size = Vector2(0, 100)
@@ -479,8 +483,7 @@ func _populate_narrative_tab() -> void:
 	# Narrative label - shows dynamic pawn story
 	var narrative_label: RichTextLabel = RichTextLabel.new()
 	narrative_label.name = "NarrativeLabel"
-	# bbcode_enabled disabled for runtime stability
-	# narrative_label.bbcode_enabled = true
+	narrative_label.bbcode_enabled = true
 	narrative_label.fit_content = true
 	narrative_label.scroll_active = true
 	narrative_label.custom_minimum_size = Vector2(0, 280)
@@ -1588,8 +1591,11 @@ func _refresh_narrative_tab() -> void:
 
 
 func _pawn_spawner() -> PawnSpawner:
+	if _cached_spawner != null and is_instance_valid(_cached_spawner):
+		return _cached_spawner
 	var n: Node = Engine.get_main_loop().root.find_child("PawnSpawner", true, false)
-	return n as PawnSpawner
+	_cached_spawner = n as PawnSpawner
+	return _cached_spawner
 
 
 func _neural_output_action_name(index: int) -> String:
@@ -1861,8 +1867,9 @@ func _count_settlement_members(settlement_idx: int) -> int:
 	var spawner: PawnSpawner = _pawn_spawner()
 	if spawner == null:
 		return count
-	for pd in spawner.all_pawn_data():
-		if pd is HeelKawnianData and int(pd.settlement_id) == settlement_idx:
+	for pawn in spawner.get_all_pawns():
+		var pd: HeelKawnianData = pawn.data if pawn != null else null
+		if pd != null and int(pd.settlement_id) == settlement_idx:
 			count += 1
 	return count
 

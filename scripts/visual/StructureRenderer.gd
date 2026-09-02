@@ -111,6 +111,8 @@ func notify_completed_job(job: Job) -> void:
 
 
 func _process(delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
 	if _needs_rescan or (tick_now - _last_scan_tick) >= RESCAN_INTERVAL_TICKS:
 		sync_from_world()
@@ -521,11 +523,9 @@ func _camera_viewport_tiles() -> Rect2i:
 	var min_y: int = int(cam_pos.y / World.TILE_PIXELS - half_tiles.y) - 2
 	var max_x: int = int(cam_pos.x / World.TILE_PIXELS + half_tiles.x) + 2
 	var max_y: int = int(cam_pos.y / World.TILE_PIXELS + half_tiles.y) + 2
-	return Rect2i(
-		maxi(0, min_x), maxi(0, min_y),
-		mini(WorldData.WIDTH, max_x) - maxi(0, min_x),
-		mini(WorldData.HEIGHT, max_y) - maxi(0, min_y)
-	)
+	var _r2_w: int = maxi(0, mini(WorldData.WIDTH, max_x) - maxi(0, min_x))
+	var _r2_h: int = maxi(0, mini(WorldData.HEIGHT, max_y) - maxi(0, min_y))
+	return Rect2i(maxi(0, min_x), maxi(0, min_y), _r2_w, _r2_h)
 
 
 func _trim_records() -> void:

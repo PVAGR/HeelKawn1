@@ -527,17 +527,21 @@ func _mode_badge_line() -> String:
 
 
 func _time_line() -> String:
+	# CURRENT calendar state derives from committed canonical time (P2B), not the
+	# compatibility tick counter. `tick` below is retained ONLY as a diagnostic
+	# compat counter in the "tick %d" / "σ+%d" suffix, never for calendar state.
+	var c_tick: int = DayNightCycle.get_current_legacy_calendar_tick()
 	var tick: int = GameManager.tick_count
 	var day_len: int = SimTime.TICKS_PER_VISUAL_DAY
-	var phase: float = float(tick % day_len) / float(day_len)
+	var phase: float = float(c_tick % day_len) / float(day_len)
 	if not is_finite(phase):
 		phase = 0.0
 	var phase_name: String = _phase_name(phase)
 	var speed_str: String = "PAUSED" if GameManager.is_paused else "%dx" % int(GameManager.game_speed)
 	# In-game hour estimate: 24 notional hours across one visual day cycle (see docs/TIME_SCALE.md).
 	var hour: int = int(phase * 24.0) % 24
-	var year_n: int = SimTime.sim_year_index(tick)
-	var day_in_year: int = SimTime.visual_day_within_sim_year(tick)
+	var year_n: int = SimTime.sim_year_index(c_tick)
+	var day_in_year: int = SimTime.visual_day_within_sim_year(c_tick)
 	var days_per_y: int = SimTime.visual_days_per_sim_year()
 	if _is_simple_hud():
 		var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]" % [
@@ -550,7 +554,7 @@ func _time_line() -> String:
 			if q >= 3.0:
 				base += "   [color=#ffab91]Δ~%.0f tf%d[/color]" % [q, cap]
 		return base
-	var y_tick: int = SimTime.tick_within_sim_year(tick)
+	var y_tick: int = SimTime.tick_within_sim_year(c_tick)
 	var base: String = "[b]Year %d[/b] · [b]Day %d/%d[/b]  %02d:00  %s   [color=#cccccc]Speed:[/color] [b]%s[/b]   [color=#888888]tick %d[/color]   [color=#666666](σ+%d)[/color]" % [
 		year_n, day_in_year, days_per_y, hour, phase_name, speed_str, tick, y_tick,
 	]
@@ -1247,9 +1251,11 @@ func _session_diag_line() -> String:
 	var acc_cap: int = int(d.get("max_accumulated_ticks", 16))
 	var tpf: int = int(d.get("max_ticks_per_frame", 8))
 	var tick_n: int = int(d.get("tick_count", 0))
+	# Current calendar (P2B) = committed canonical time -> legacy tick.
+	var cal_tick: int = DayNightCycle.get_current_legacy_calendar_tick()
 	var cal: String = "Y%d D%d/%d" % [
-		SimTime.sim_year_index(tick_n),
-		SimTime.visual_day_within_sim_year(tick_n),
+		SimTime.sim_year_index(cal_tick),
+		SimTime.visual_day_within_sim_year(cal_tick),
 		SimTime.visual_days_per_sim_year(),
 	]
 	var base: String = (

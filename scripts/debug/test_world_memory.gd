@@ -15,8 +15,8 @@ func _ready() -> void:
 		pawns.append(pawn)
 
 	WorldMemory.clear()
-	WorldMemory.record_event(WorldMemoryTypes.EventType.PAWN_DIED, "pawn_001", Vector2i(8, 8), {"killer_id": "wolf_001"})
-	WorldMemory.record_event(WorldMemoryTypes.EventType.PAWN_DIED, "pawn_002", Vector2i(8, 8), {"killer_id": "wolf_001"})
+	WorldMemory.record_event({"type": WorldMemoryTypes.EventType.PAWN_DIED, "tick": "pawn_001", "region": Vector2i(8, 8), "data": {"killer_id": "wolf_001"}})
+	WorldMemory.record_event({"type": WorldMemoryTypes.EventType.PAWN_DIED, "tick": "pawn_002", "region": Vector2i(8, 8), "data": {"killer_id": "wolf_001"}})
 
 	var events: Array[Dictionary] = WorldMemory.get_events_since(0, 999999)
 	var export_a: String = WorldMemory.get_history_export_string(false)

@@ -12,8 +12,6 @@ var _last_decay_tick: int = 0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	if has_node("/root/GameManager"):
-		GameManager.game_tick.connect(_on_game_tick)
 
 
 func bind_context(world_ref: World, pawn_spawner_ref: PawnSpawner) -> void:

@@ -120,10 +120,6 @@ var _player_gathering: Node = null
 var _pawn_spawner: Node = null
 
 
-func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
-
-
 func _ensure_references() -> void:
 	if _world == null:
 		_world = get_node_or_null("/root/Main/World")

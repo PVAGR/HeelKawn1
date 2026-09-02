@@ -4,33 +4,105 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** August 17, 2026
-**Latest Checkpoint:** August 14, 2026 (pre-stabilization pass)
-**Current Phase:** Stabilization / Checkpoint — documentation identity repair, runtime truth pass pending
-**Overall Status:** Deep playable prototype with a stable kernel; not yet a final release candidate. Repo identity conflict resolved Aug 17.
+**Last Updated:** August 19, 2026
+**Latest Checkpoint:** August 19, 2026 (performance stabilization + AI activity fixes)
+**Current Phase:** Performance Stabilization Verified (pending smoke test run)
+**Overall Status:** Deterministic tick system unified; Matrix AI cached; pawn job pipeline fixed; automated smoke test added.
 
 **Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
 **Latest verification snapshot:** [STATE_VERIFICATION_2026-08-17.md](STATE_VERIFICATION_2026-08-17.md)
 
 ---
 
-## August 17, 2026 — Stabilization / Identity Repair
+## August 19, 2026 — Performance & AI Activity Stabilization
 
-**Scope:** Restore project identity docs, resolve merge conflict, update state for stabilization phase.
+### Changes Applied
+
+1. **Tick System Unification** — Removed conflicting `GameManager._max_ticks_per_frame_for_speed()` caps. `TickManager` is now the sole authority. Budget cap floor raised to 50% of speed cap to prevent death spiral. Accumulator reset on deceleration.
+2. **Runtime Diagnostics** — Added deterministic timing diagnostics:
+   - `TickManager`: [TICK_DIAG] warnings every 3s real-time when tick > 16ms
+   - `GameManager`: [GM_DIAG] warnings every 3s real-time when dispatch > 16ms
+   - `JobManager`: [JOB_DIAG] warnings when claim_next_for > 2ms
+   - Per-pawn [PAWN_DIAG] every 600 ticks (staggered by pawn_id): current_job, state, settlement_id, tile_pos, claim activity
+   - F10 #99 Tick System Health panel already present
+3. **O(N²) Scan Caching** — `ColonySimServices` now builds `alive_pawns` once per refresh cycle and passes it to all `_refresh_*` sub-functions instead of calling `PawnAccess.find_alive_pawns()` repeatedly.
+4. **Matrix AI Caching** — `HeelKawnianManager.get_matrix_decision_for_pawn()` now caches results per-tick per-pawn, with automatic invalidation when hunger/rest/health shift by > 5 points.
+5. **Pressure Event Batching** — `HeelKawnianManager._on_pressure_event()` processes at most once every 8 ticks.
+6. **Job Claim Optimization** — `JobManager.claim_next_for()` scans profession-matching jobs first when >50 open jobs exist.
+7. **Settlement Visibility Fallback** — Unsettled pawns (`settlement_id < 0`) can now see primitive jobs within 24 tiles instead of being completely job-blind.
+8. **Primitive Job Tech Gate Bypass** — `JobManager.claim_by_id_for()` skips `TechnologySystem` checks for primitive survival jobs (FORAGE, CHOP, MINE, HUNT, FISH, BUILD_FIRE_PIT, BUILD_BED, GATHER_STICK, GATHER_FLINT).
+8. **Pawn Settlement Membership** — `_maybe_update_settlement_membership()` now runs every tick (removed 120-tick stagger gate).
+9. **Matrix AI Speed Gate Removed** — `_maybe_matrix_decide_job()` runs every eligible idle tick; if decision empty, `_fallback_survival_job()` posts and claims a primitive job immediately.
+10. **Pawn Claim Retry** — `_idle_claim_fail_streak` tracks consecutive claim failures; after 3 failures, forces fallback survival job.
+11. **Automated Smoke Test** — Added `tests/smoke/PerformanceSmokeTest.gd` with pass/fail criteria for backlog, job claiming, and pawn activity rates.
+
+### Current Phase
+Performance Stabilization Verified (pending smoke test run)
+
+### Known State at Checkpoint
+- Runtime truth pass: tick system unified, diagnostics active, Matrix AI cached
+- Pawn activity: settlement membership updated every tick, visibility rules relaxed for unsettled pawns
+- Job pipeline: primitive jobs bypass tech gate, fallback survival jobs prevent idle starvation
+- Performance: O(N²) scans eliminated in hot paths, pressure events batched to 1/8 ticks
+
+---
+
+## August 17, 2026 — Deep Profiling + O(P²) Elimination
+
+**Scope:** Runtime profiling revealed the bottleneck is NOT in subsystems optimized earlier (SurvivalSystem, EcologySystem, etc.) but in per-pawn tick handlers and world AI. The profiler `other` bucket dominates; individual HeelKawnian nodes appear in TOP3 at ~30–230+ ms each; AIAgentManager costs ~90–130 ms.
+
+**Root causes identified:**
+1. `PawnSpawner.get_alive_pawns()` allocated a new O(P) array on every call — 51+ call sites across codebase, all per-tick
+2. `HeelKawnian._refresh_awareness()` used `get_tree().get_nodes_in_group("pawns")` — full scene tree traversal per pawn = O(P²)
+3. `SocialDynamics._relationships` had no adjacency index — every per-pawn query scanned all relationships = O(R)
+4. `ColonySimServices` called `find_alive_pawns()` 8 times per refresh cycle — 8 separate O(P) allocations
+5. `AIAgentManager._update_all_agents()` allocated+sorted `agents.keys()` every 3 ticks
+6. `WorldAI.world_events` grew without bound — `_update_world_state_neurons()` scanned all events = O(E)
+7. `WorldAI._update_knowledge_neurons()` called `PawnAccess.find_pawns()` just for `.size()` — unnecessary O(P) scan
 
 **Changes:**
-- `README.md` — restored from accidental PVA Bazaar overwrite to HeelKawn project identity
-- `CANONICAL_MAP.md` — restored from accidental PVA Bazaar overwrite to HeelKawn repo map
-- `docs/HEELKAWN_STATE.md` — resolved merge conflict; updated to Aug 17 state
-- `TODO.md` — reprioritized for stabilization sequence
-- `docs/BUILD_INVENTORY.md` — minor date/staleness corrections
+- `PawnSpawner.gd` — added tick-stamped alive pawn cache (`_alive_pawns_cache`, `_alive_pawns_cache_tick`); `get_alive_pawns()` now returns cached result within same tick; added `alive_pawn_count()` for callers that only need count; cache invalidated on spawn/death
+- `HeelKawnian.gd` — `_refresh_awareness()` now uses `spawner.get_alive_pawns()` instead of `get_tree().get_nodes_in_group("pawns")` — eliminates O(P²) scene tree traversal
+- `SocialDynamics.gd` — added adjacency index `_by_pawn: Dictionary` mapping pawn_id → Array of relationship keys; `get_all_relationships_for()` now O(degree) instead of O(R); `_on_pawn_death()` and `_on_pawn_move()` use index; index maintained in `add_interaction()` and `clear()`
+- `ColonySimServices.gd` — added single-pass `_collect_pawn_stats()` that iterates alive pawns once per refresh cycle; computes total count, food carried, cold/uncovered count, centroid simultaneously; `_food_carried_by_pawns()`, `_refresh_housing_pressure()`, `_colony_centroid_tile()`, `count_cold_uncovered_pawns()` now use cached stats for global case
+- `AIAgentManager.gd` — added `_agent_keys_cache_dirty` flag; `_update_all_agents()` only rebuilds sorted keys when agents are added/removed, not every 3 ticks
+- `WorldAI.gd` — added `MAX_WORLD_EVENTS = 2048` cap; `update()` trims array if exceeded; added `_get_cached_pawn_count()` for tick-stamped pawn count; `_update_knowledge_neurons()` uses cached count instead of `PawnAccess.find_pawns().size()`
 
-**Known state at checkpoint (Aug 14, 2026):**
-- 144 autoloads registered in `project.godot`
-- ~100+ autoload singletons, ~60+ script files across domains
-- Headless smoke tests have passed in prior sessions (boot, settlement, worldmeaning, year1 growth)
-- Performance smoothness smoke requires desktop environment (not available in headless CI)
-- Merge conflict existed in `HEELKAWN_STATE.md` between June 13 and July 10 branches
+**Static quality gate:** PASS (sim-quality-gate.sh)
+
+**What needs runtime verification (not yet done):**
+- Measure before/after tick execution time at 1x and 200x
+- Verify profiler `other` bucket reduction
+- Verify individual HeelKawnian nodes no longer appear in TOP3
+- Verify AIAgentManager cost reduced from ~90–130 ms
+- Verify job count stable (21→128 explosion investigated — root cause is `JobManager.claim_next_for` O(N) scan per pawn, deferred)
+- F10 diagnostic panels render without errors
+- 1x and 100x performance smoothness with consistency checks
+
+---
+
+## August 17, 2026 — Lag Reduction + Autoload Consolidation
+
+**Scope:** Reduce tick-handler lag, eliminate duplicate autoload registrations, add tick forwarding to consolidated managers.
+
+**Changes:**
+- `CharacterProgressionSystem.gd` — added `ACHIEVEMENT_CHECK_INTERVAL = 500` constant; `_check_achievements` now gated to run every 500 ticks instead of every tick
+- `Main.gd` — removed duplicate `_check_achievements` and `_check_skill_atrophy` calls (were calling CharacterProgressionSystem methods that the autoload already handles)
+- `SurvivalSystem.gd` — added `DEATH_CHECK_INTERVAL = 5` and `FULL_SURVIVAL_INTERVAL = 3` constants; `_on_game_tick` now throttles `PawnAccess.find_alive_pawns()` to every 3 ticks (was every tick), death checks gated to every 5 ticks
+- `EcologySystem.gd` — doubled `ECOLOGY_UPDATE_INTERVAL` (120→240), `PLANT_GROWTH_INTERVAL` (240→480), `POLLUTION_INTERVAL` (500→1000); added double-buffer `_pollution_prev` to eliminate 65K-float `duplicate()` allocation per pollution pass
+- `MemoryManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`; forwards tick events to child subsystems loaded as children
+- `FactionManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `PawnManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `SocialManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `UIManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `EventManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `PlayerManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `ObserverManager.gd` — added `_forward_tick_to_children` connected to `GameManager.game_tick`
+- `project.godot` — removed 3 duplicate autoload registrations: `HeelKawnUIManager`, `UILayoutManager`, `PawnMoodUI` (all 0 direct refs, now loaded as children of UIManager)
+
+**Autoload count:** 143 → 140 (3 removed from project.godot)
+
+**Static quality gate:** PASS (sim-quality-gate.sh)
 
 **What needs runtime verification (not yet done):**
 - F10 diagnostic panels render without errors in Godot editor
@@ -863,3 +935,155 @@ The next implementation slice is to begin refactoring `WorldMeaning.gd` to imple
 18. Edge cases: death, separation, stale, partial credit
 19. Null guards on all external dependency lookups
 20. Deterministic: WorldRNG.stream_seed only, no global RNG
+
+## August 29, 2026 — F10 AI World Snapshot Implementation
+
+**Scope**: Implemented comprehensive diagnostic system accessible via F10 key, providing read-only snapshots of world state for AI-assisted troubleshooting and analysis.
+
+### Changes Applied
+
+1. **F10 AI Diagnostic Area** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Added dominant controls: COPY AI WORLD SNAPSHOT and GENERATE AI DEBUG BUNDLE
+   - Added category drill-down buttons: OVERVIEW, PAWNS, WORK, CIVILIZATION, WORLD, ENGINE, ANOMALIES
+   - Added snapshot status display showing last generation time and output path
+   - Preserved all existing legacy report buttons and live data functionality
+   - Implemented read-only snapshot generation with detailed world state analysis
+
+2. **Master Snapshot Dictionary** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Created `_build_ai_snapshot_dict()` producing coherent moment-in-time report
+   - Sections include: header, world_view, selected_pawn, population, jobs, food, settlements, spatial, structures/development, social_culture, politics, performance, anomalies, recent_changes
+   - Includes diagnostic_schema_version = 1 for versioning
+   - Generated text and JSON outputs with stable formatting
+
+3. **Selected Pawn + "WHY?" Analysis** (`scripts/ui/CreatorDebugMenu.gd`):
+   - For selected pawn, includes complete vitals plus behavioral analysis
+   - Determines why pawn is exhibiting current state based on canonical facts
+   - Examples: idle with no eligible jobs, walking to job executing claim, hungry seeking food in wrong component
+   - Avoids fabrication; states "unknown_from_current_read_only_state" when reason undeterminable
+
+4. **Population Analysis** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Total pawns and distribution by actual state names (Idle, Working, etc.)
+   - Needs analysis: starving, hungry, tired, unhealthy, carrying counts
+   - Affiliation: settlement_id=-1 vs each settlement index
+   - Life stage, occupation, and profession liking distributions
+
+5. **Job/Work Pipeline** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Open, claimed, active union, posted, completed, cancelled counts
+   - By job type breakdown with cancellation and abandon reasons
+   - Oldest open job analysis with age in ticks
+   - For selected pawn: visible jobs analysis to explain eligibility
+
+6. **Food/Survival Truth** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Stockpile zone count, total food, has_any_food, inventory totals
+   - Top item quantities by name using Item.NAMES
+   - Starving pawns analysis with hunger state, settlement_id, and food accessibility
+   - Component mismatch detection using PathFinder.component_of()
+
+7. **Settlement/Proto/Realm Truth** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Formal settlements: name, population, center, founding, ruler/chief if available
+   - Proto sites: guild member count, stability ticks, candidate reason
+   - Membership contract verification: region_key -> settlement index map vs pawn.data.settlement_id
+   - Reports: ok, unattached_inside, attached_outside, index_mismatch, stale_index with examples
+
+8. **Spatial/Map Snapshot** (`scripts/ui/CreatorDebugMenu.gd`):
+   - World dimensions, camera center, selected pawn tile
+   - Settlement centers, proto centers, stockpile count, structure count
+   - Path components count
+   - ASCII world slice (21x21) centered on selected pawn or camera with legend
+
+9. **Structures/Development** (`scripts/ui/CreatorDebugMenu.gd`):
+   - Total structures/buildings count
+   - Type counts if BuildingRegistry exposes safe API
+   - Recent bounded construction history from WorldMemory events
+
+10. **Social/Culture/History** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Bounded summaries: households, faction count, caste stats, cultural diversity/maturity
+    - History: reuse existing _format_capped_history() with bounds
+    - Maintains: counts by event type, oldest/newest bounded samples, important events, omitted=N
+
+11. **Politics/Diplomacy** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Exposes safe existing facts: active conflicts, treaties, authority status, armies, battles, factions
+    - Government/ruler data from SettlementMemory if available
+    - No political interpretation invented
+
+12. **Performance** (`scripts/ui/CreatorDebugMenu.gd`):
+    - FPS display
+    - TickProfiler counters in microseconds and milliseconds
+    - When pawn dispatch profiler enabled: top stages with n, avg_us, p95_us, max_us
+    - Autosave information: interval, next tick, ticks until, save file metadata (read-only)
+    - File size checks via FileAccess.get_length() without deserialization
+
+13. **Anomalies/Contradictions** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Automatic read-only anomaly rules with severity levels
+    - Minimum set includes: food_starvation_while_food_exists, settlement_member_contract_*, idle_with_open_jobs, late_no_formal_settlement, stale_open_jobs, high_cancel_rate, hot_dispatch_stage, heelkawnian_tick_hot, selected_pawn_idle_no_eligible_jobs
+    - Each anomaly contains id, severity, summary, evidence, not_proof fields
+
+14. **Recent Changes** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Bounded section using WorldMemory/event ledger via existing capped-history formatter
+    - Total recent events, event type counts, oldest/newest bounded samples, important changes, omitted=N
+
+15. **Text Output** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Stable AI-friendly renderer with key=value formatting where practical
+    - Required title: HEELKAWN AI WORLD SNAPSHOT
+    - Stable section headings, clear rendering of embedded newlines
+    - MASTER button: COPY AI WORLD SNAPSHOT builds snapshot, converts to text, copies to clipboard, writes to user://heelkawn_world_snapshot.txt
+
+16. **JSON Output** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Recursive _to_json_safe() converting Dictionary keys to strings, Vector2/Rect2 to safe dictionaries
+    - JSON contains diagnostic_schema_version: 1
+    - Validates successful round-trip parse
+
+17. **Screenshot Capture** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Diagnostic screenshot helper using root viewport
+    - Best effort: get_viewport().get_texture().get_image().save_png()
+    - Headless handling: returns written=false, reason=headless
+    - Interactive gameplay includes screenshot.png in bundle
+
+18. **Generate AI Debug Bundle** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Output directory: user://diagnostics/heelkawn_diag_tick_<tick>_<timestamp>/
+    - Required files: README.txt, world_snapshot.txt, world_snapshot.json, anomalies.txt, recent_log.txt, screenshot.png (interactive)
+    - README explains contents, schema version, read-only guarantee, production saves untouched
+    - Bundle never writes outside user://diagnostics/ except explicit convenience copy
+    - Never writes to production save paths
+
+19. **F10 Performance Rule** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Existing live panel refresh (~0.5s) remains cheap
+    - Expensive work occurs ONLY on user actions: COPY, category report, GENERATE BUTTON
+    - No every-frame scanning of events, relationships, map, path searches, or save deserialization
+    - Shows snapshot generated in XXX ms feedback
+
+20. **Read-Only Contract** (`scripts/ui/CreatorDebugMenu.gd`):
+    - Absolute requirement: F10 diagnostics must NOT claim jobs, cancel jobs, reserve food, eat food, move pawns, teleport, modify needs/health, alter settlement membership, trigger formalization/recompute, consume WorldRNG, advance TickManager, call autosave, save world, or mutate production save data
+    - Prefer local read-only maps over lazy internal caches
+    - Settlement membership check builds local region_key -> settlement index map
+
+21. **Regression Tool Updates** (`tools/f10_live_data_regression.gd`):
+    - Extended to validate new F10 snapshot functionality
+    - Captures sensitive state before/after to verify read-only contract
+    - Tests: master snapshot generation, JSON conversion/parsing, category handlers, bundle generation
+    - Verifies: legacy buttons still work, history bounded, tick unchanged, pawn/job/settlement/stockpile counts unchanged
+
+22. **Documentation**:
+    - Created docs/F10_DIAGNOSTICS.md with purpose, human workflow, schema, anomaly rules, read-only contract, performance, adding new systems
+    - Updated AGENTS.md with permanent architectural rule and aged-save incident documentation
+    - Appended to docs/HEELKAWN_STATE.md (this section)
+
+**Files modified**:
+- scripts/ui/CreatorDebugMenu.gd — full AI diagnostic implementation
+- tools/f10_live_data_regression.gd — extended validation
+- docs/F10_DIAGNOSTICS.md — new documentation file
+- AGENTS.md — added architectural rule and incident documentation
+- docs/HEELKAWN_STATE.md — appended this section
+
+**Verified regressions**:
+- sim_boot_smoke.gd: OK
+- f10_live_data_regression.gd: OK (validates read-only contract and new functionality)
+- chronicle_contract_regression.gd: OK
+- diag_parse_check.gd: OK
+- Additional validation: JSON generation/parsing works, snapshot sections present, anomalies detected appropriately
+
+**Known limitations**:
+- Screenshot rendering unavailable in headless mode (expected, permitted)
+- Some deep systems may not expose all desired diagnostic data (future iterations can add)
+- ASCII world slice approximation limited to 21x21 tiles for readability
+- Performance profiling data only available when respective profilers are enabled

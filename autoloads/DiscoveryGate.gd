@@ -35,8 +35,6 @@ static func init() -> void:
 	if _initialized:
 		return
 	_initialized = true
-	if GameManager != null:
-		GameManager.game_tick.connect(_on_game_tick)
 
 
 static func _on_game_tick(_tick: int) -> void:

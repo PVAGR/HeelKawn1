@@ -20,6 +20,8 @@ func _ready() -> void:
 		TickManager.mark_tickable_cache_dirty()
 	if GameManager != null and not GameManager.game_tick.is_connected(_on_game_tick_prune):
 		GameManager.game_tick.connect(_on_game_tick_prune)
+	if GameManager != null:
+		GameManager.game_tick.connect(_on_game_tick_diag)
 
 
 
@@ -57,6 +59,11 @@ var cancelled_count: int = 0
 var _cancel_reasons: Dictionary = {}
 ## Abandon reason tracking (diagnostic). reason_string -> count.
 var _abandon_reasons: Dictionary = {}
+
+## Window counters for periodic diagnostics.
+var _diag_created_this_window: int = 0
+var _diag_completed_this_window: int = 0
+var _diag_cancelled_this_window: int = 0
 
 ## Global tile failure cache: tile_key(int) -> {tick: int, reason: String}.
 ## Prevents re-posting jobs on tiles that have failed recently (resource depleted,
@@ -191,6 +198,7 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	_jobs_by_tile[tile] = job
 	_cache_job_context(job)
 	posted_count += 1
+	_diag_created_this_window += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	return job
@@ -260,7 +268,29 @@ static func _is_construction_type(type: int) -> bool:
 	return false
 
 
-## Compatibility adapter for systems that post job dictionaries.
+## Returns true for primitive survival/build jobs that bypass tech requirements.
+static func _is_primitive_job(type: int) -> bool:
+	match type:
+		Job.Type.FORAGE:
+			return true
+		Job.Type.CHOP:
+			return true
+		Job.Type.MINE:
+			return true
+		Job.Type.HUNT:
+			return true
+		Job.Type.FISH:
+			return true
+		Job.Type.BUILD_FIRE_PIT:
+			return true
+		Job.Type.BUILD_BED:
+			return true
+		Job.Type.GATHER_STICK:
+			return true
+		Job.Type.GATHER_FLINT:
+			return true
+		_:
+			return false
 ## Accepts either numeric `type` or string aliases (`"harvest_crops"`, `"build"`).
 func post_from_dict(job_data: Dictionary) -> Job:
 	if job_data.is_empty():
@@ -397,6 +427,7 @@ func post_trade_haul(
 	_jobs_by_tile[work_tile] = job
 	_cache_job_context(job)
 	posted_count += 1
+	_diag_created_this_window += 1
 	_bump_jobs_data_generation()
 	job_posted.emit(job)
 	# Carry optional authority metadata from trade args (compat)
@@ -419,54 +450,102 @@ static func _get_with_default(obj: Variant, key: String, default: Variant) -> Va
 	return val if val != null else default
 
 
+# PERF PASS 2: Within a single pawn decision (one game tick) the pawn state and
+# WorldAI obedience weight are stable, yet a single idle decision calls
+# claim_next_for several times (matrix + food + goal + unfiltered fallback).
+# Rebuilding the visibility context (3 SettlementMemory lookups) and the
+# obedience weight (2 FactionManager lookups) on every call is pure waste.
+# Memoize per (pawn, tick) so the expensive context is computed once.
+var _claim_ctx_pawn: Object = null
+var _claim_ctx_tick: int = -1
+var _claim_ctx_data: Dictionary = {}
+var _claim_ctx_obedience: float = 1.0
+# PERF PASS 3: per-job visibility under social rules depends only on (pawn, job,
+# tick) — yet the claim loop recomputes `_job_visible_to_pawn_with_context` for
+# every open job on every scan, and an idle decision scans ~4x. Memoize the
+# result per (pawn, tick) and reuse it across the scans of one decision.
+var _claim_vis_cache: Dictionary = {}
+
 ## Return the best open job for this pawn, or null. "Best" = highest priority
 ## (plus optional `priority_bonus` offset), then Chebyshev distance. `filter`
 ## rejects ineligible jobs; `priority_bonus` can bias toward colony labor stance.
 ## Also applies WorldAI pawn obedience weight to influence job selection.
 func claim_next_for(
-		pawn: Node, filter: Callable = Callable(), priority_bonus: Callable = Callable()
-	) -> Job:
+	pawn: Node, filter: Callable = Callable(), priority_bonus: Callable = Callable()
+) -> Job:
+	var _claim_t0: int = Time.get_ticks_usec()
 	var pd = pawn.call("get_pawn_data") if pawn != null and pawn.has_method("get_pawn_data") else null
 	if _open.is_empty() or pawn == null or pd == null:
 		return null
-	var pawn_ctx: Dictionary = _build_pawn_visibility_context(pawn, pd)
+	var cur_tick: int = GameManager.tick_count if GameManager != null else -1
+	var pawn_ctx: Dictionary
+	var obedience_weight: float = 1.0
+	if _claim_ctx_pawn == pawn and _claim_ctx_tick == cur_tick:
+		pawn_ctx = _claim_ctx_data
+		obedience_weight = _claim_ctx_obedience
+	else:
+		pawn_ctx = _build_pawn_visibility_context(pawn, pd)
+		if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+			obedience_weight = WorldAI.get_pawn_obedience_weight(int(pd.id))
+		_claim_ctx_pawn = pawn
+		_claim_ctx_tick = cur_tick
+		_claim_ctx_data = pawn_ctx
+		_claim_ctx_obedience = obedience_weight
+		# Precompute visibility for all open jobs once (cheap dict fill); the scan
+		# loop below reuses it via a lookup instead of recomputing per job.
+		_claim_vis_cache = {}
+		for _vj in _open:
+			_claim_vis_cache[_vj] = _job_visible_to_pawn_with_context(_vj, pawn, pd, pawn_ctx)
 	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
 	
-	# Get pawn obedience weight from WorldAI (affects job compliance)
-	var obedience_weight: float = 1.0
-	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
-		obedience_weight = WorldAI.get_pawn_obedience_weight(int(pd.id))
+	# PROMPT 3: Profession-based early-out — when there are many open jobs (>50)
+	# and no explicit filter, first try a filtered scan for this pawn's profession.
+	var scan_jobs: Array = _open
+	if _open.size() > 50 and not filter.is_valid():
+		var profession: int = 0
+		if pd != null and pd.has_method("get"):
+			profession = int(pd.get("current_profession", 0))
+		if profession > 0:
+			var filtered: Array[Job] = get_open_jobs_for_profession(profession)
+			if not filtered.is_empty():
+				scan_jobs = filtered
 	
 	var best_idx: int = -1
 	var best_eff: int = -0x7FFFFFFF
 	var best_dist: int = 0x7FFFFFFF
 	var use_filter: bool = filter.is_valid()
 	var use_bonus: bool = priority_bonus.is_valid()
-	for i in range(_open.size()):
-		var j: Job = _open[i]
+	# Cache per-type interest/tool bonuses: they depend only on (pawn, job type),
+	# not the job instance, so pay 2 method calls per type instead of per job.
+	var _type_bonus_cache: Dictionary = {}
+	for i in range(scan_jobs.size()):
+		var j: Job = scan_jobs[i]
 		# Enforce filter if provided
 		if use_filter and not filter.call(j):
 			continue
 		# Authority / visibility guard: skip jobs not visible to this pawn under social rules
-		if not _job_visible_to_pawn_with_context(j, pawn, pd, pawn_ctx):
+		var _vis = _claim_vis_cache.get(j, null)
+		if _vis == null:
+			_vis = _job_visible_to_pawn_with_context(j, pawn, pd, pawn_ctx)
+			_claim_vis_cache[j] = _vis
+		if not _vis:
 			continue
+		var jt: int = j.type
 		var bonus: int = 0
 		if use_bonus:
 			bonus = int(priority_bonus.call(j))
-		
-		# --- PHASE 1: Interest-Driven Priority ---
-		# Apply bonuses/penalties based on pawn likes/dislikes
-		var job_cat: String = pd.call("job_category_for_type", j.type) if pd.has_method("job_category_for_type") else ""
-		if not job_cat.is_empty():
-			if pd.likes is Dictionary and pd.likes.has(job_cat):
-				bonus += 5
-			if pd.dislikes is Dictionary and pd.dislikes.has(job_cat):
-				bonus -= 5
-		
-		# --- PHASE 2: Tool Enforcement ---
-		# Apply a priority penalty if the required tool is missing
-		if pd.has_method("has_required_tool_for_job") and not pd.has_required_tool_for_job(j.type):
-			bonus -= 10
+		if not _type_bonus_cache.has(jt):
+			var _tb: int = 0
+			var job_cat: String = pd.call("job_category_for_type", jt) if pd.has_method("job_category_for_type") else ""
+			if not job_cat.is_empty():
+				if pd.likes is Dictionary and pd.likes.has(job_cat):
+					_tb += 5
+				if pd.dislikes is Dictionary and pd.dislikes.has(job_cat):
+					_tb -= 5
+			if pd.has_method("has_required_tool_for_job") and not pd.has_required_tool_for_job(jt):
+				_tb -= 10
+			_type_bonus_cache[jt] = _tb
+		bonus += int(_type_bonus_cache[jt])
 		
 		# Apply obedience weight to priority (lower obedience = higher priority needed to accept)
 		var adjusted_priority: int = j.priority
@@ -480,16 +559,38 @@ func claim_next_for(
 			best_eff = eff
 			best_dist = d
 	if best_idx < 0:
+		# DIAGNOSTICS: slow claim warning (even on null return — O(N) scan may be slow)
+		var _claim_elapsed: int = Time.get_ticks_usec() - _claim_t0
+		if _claim_elapsed > 2_000:
+			var pawn_id: int = -1
+			if pd != null and pd.has_method("get"):
+				pawn_id = int(pd.get("id"))
+			print("[JOB_DIAG] claim_next_for pawn=%d elapsed=%dus open_jobs=%d" % [
+				pawn_id, _claim_elapsed, _open.size()
+			])
 		return null
-	var job: Job = _open[best_idx]
-	_open.remove_at(best_idx)
+	var job: Job = scan_jobs[best_idx]
+	# Find and remove from _open (scan_jobs may be a filtered copy)
+	var open_idx: int = _open.find(job)
+	if open_idx >= 0:
+		_open.remove_at(open_idx)
+	else:
+		return null  # job was consumed by another pawn between scan and claim
 	_claimed.append(job)
 	job.state = Job.State.CLAIMED
 	job.assigned_pawn = pawn
 	_bump_jobs_data_generation()
 	job_claimed.emit(job, pawn)
+	# DIAGNOSTICS: slow claim warning
+	var _claim_elapsed: int = Time.get_ticks_usec() - _claim_t0
+	if _claim_elapsed > 2_000:
+		var pawn_id: int = -1
+		if pd != null:
+			pawn_id = int(pd.get("id")) if pd.has_method("get") else -1
+		print("[JOB_DIAG] claim_next_for pawn=%d elapsed=%dus open_jobs=%d" % [
+			pawn_id, _claim_elapsed, _open.size()
+		])
 	return job
-
 
 
 ## HeelKawnian gave up on a job (couldn't reach it, or was freed). Puts it back in
@@ -504,6 +605,7 @@ func abandon(job: Job, reason: String = "") -> void:
 	job.assigned_pawn = null
 	job.work_ticks_done = 0
 	_open.append(job)
+	_diag_cancelled_this_window += 1
 	_bump_jobs_data_generation()
 	if not reason.is_empty():
 		_abandon_reasons[reason] = int(_abandon_reasons.get(reason, 0)) + 1
@@ -522,6 +624,7 @@ func complete(job: Job) -> void:
 	_notify_path_reservation_released(job)
 	job.state = Job.State.COMPLETED
 	job.assigned_pawn = null
+	_diag_completed_this_window += 1
 	_bump_jobs_data_generation()
 	_notify_world_ai_job_completion(job)
 	job_completed.emit(job)
@@ -540,6 +643,7 @@ func cancel(job: Job, reason: String = "") -> void:
 	job.state = Job.State.CANCELLED
 	job.assigned_pawn = null
 	cancelled_count += 1
+	_diag_cancelled_this_window += 1
 	if not reason.is_empty():
 		_cancel_reasons[reason] = int(_cancel_reasons.get(reason, 0)) + 1
 	_bump_jobs_data_generation()
@@ -576,10 +680,10 @@ func _job_visible_to_pawn_with_context(j: Job, pawn: Node, pd: Variant, pawn_ctx
 		return true
 	if pawn_region_key >= 0 and pawn_center >= 0 and pawn_center == job_center:
 		return true
-	if SettlementMemory != null and pawn_region_key >= 0:
-		var pawn_settlement_id: int = SettlementMemory.get_settlement_id_for_region(pawn_region_key)
-		if pawn_settlement_id >= 0 and pawn_settlement_id == job_settlement_id:
-			return true
+	# pawn_settlement_id is already cached in pawn_ctx by _build_pawn_visibility_context
+	var pawn_settlement_id: int = int(pawn_ctx.get("settlement_id", -1))
+	if pawn_settlement_id >= 0 and pawn_settlement_id == job_settlement_id:
+		return true
 	var vis: String = str(j.visible_to).to_lower()
 	if vis == "settlement" and d <= 48:
 		return true
@@ -602,6 +706,9 @@ func _job_visible_to_pawn_with_context(j: Job, pawn: Node, pd: Variant, pawn_ctx
 		return false
 	if str(j.visible_to).to_lower() == "nearby" or scope == "nearby":
 		return d <= 32
+	# PROMPT 4: Pawns with no settlement/region can still see nearby jobs within 24 tiles
+	if pawn_center < 0 and pawn_region_key < 0:
+		return d <= 24
 	if pawn_region_key < 0 or pawn_center < 0:
 		return d <= 40
 	return false
@@ -626,7 +733,10 @@ func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
 			var work_tile: Vector2i = j.work_tile
 			var rk2: int = WorldMemory._region_key(int(work_tile.x), int(work_tile.y))
 			settlement_id = SettlementMemory.get_center_region_for_region(rk2)
-		if settlement_id >= 0 and TechnologySystem != null:
+		# PROMPT 4: Primitive jobs bypass tech gate
+		if _is_primitive_job(j.type):
+			pass
+		elif settlement_id >= 0 and TechnologySystem != null:
 			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
 				return null
 		_open.remove_at(i)
@@ -658,9 +768,20 @@ func clear_all() -> void:
 
 
 const STALE_OPEN_JOB_TICKS: int = 200
+## Hard timeout: cancel ANY open job older than this, even on valid tiles.
+## Prevents unbounded queue growth when jobs are never claimed.
+const HARD_STALE_OPEN_JOB_TICKS: int = 3000
+const HARD_STALE_CONSTRUCTION_TICKS: int = 6000
+## Soft timeout for still-valid jobs: an open job unclaimed this long is pruned
+## even if its target tile is fine. Keeps the open board proportional to actual
+## throughput (one-job-per-pawn model) instead of clogging with stale work.
+const STALE_VALID_OPEN_JOB_TICKS: int = 1800
 
 
-## Cancel open jobs that sat unclaimed on invalid tiles for [param max_unclaimed_ticks]+.
+## Cancel open jobs that sat unclaimed for too long. Valid-tile jobs are pruned
+## after STALE_VALID_OPEN_JOB_TICKS (longer for construction); any job that
+## exceeds the hard timeout is always cancelled. This bounds queue growth so
+## every pawn search stays cheap and no job lingers unclaimed forever.
 func prune_stale_open_jobs(world: World, max_unclaimed_ticks: int = STALE_OPEN_JOB_TICKS) -> int:
 	if world == null or world.data == null:
 		return 0
@@ -671,19 +792,45 @@ func prune_stale_open_jobs(world: World, max_unclaimed_ticks: int = STALE_OPEN_J
 		if j == null or j.state != Job.State.OPEN:
 			continue
 		var posted: int = int(j.posted_tick)
-		# Construction jobs get double the stale threshold — they wait for materials
-		var effective_max: int = max_unclaimed_ticks
-		if _is_construction_type(j.type):
-			effective_max = max_unclaimed_ticks * 2
-		if posted > 0 and tick - posted < effective_max:
+		if posted <= 0:
 			continue
+		var age: int = tick - posted
+		var is_construction: bool = _is_construction_type(j.type)
+		# Hard timeout: cancel regardless of tile validity.
+		var hard_max: int = HARD_STALE_CONSTRUCTION_TICKS if is_construction else HARD_STALE_OPEN_JOB_TICKS
+		if age >= hard_max:
+			doomed.append(j)
+			continue
+		# Soft timeout for still-valid jobs: prune unclaimed work that has sat
+		# too long so it stops bloating every pawn's job search. Construction jobs
+		# use the same window — the seeder re-posts them when still needed, so a
+		# valid build job sitting unclaimed for this long is stale, not pending.
+		var valid_max: int = STALE_VALID_OPEN_JOB_TICKS
+		if age >= valid_max:
+			doomed.append(j)
+			continue
+		# Brief grace for very young jobs.
+		if age < max_unclaimed_ticks:
+			continue
+		# Between grace and valid_max: keep if the tile is still valid, else prune.
 		if is_job_target_still_valid(world, j):
 			continue
 		doomed.append(j)
 	for j in doomed:
-		cancel(j, "stale_invalid_tile")
+		var reason: String = "stale_invalid_tile"
+		if is_job_target_still_valid(world, j):
+			reason = "stale_valid_timeout"
+		elif age_for_job(j, tick) >= (HARD_STALE_CONSTRUCTION_TICKS if _is_construction_type(j.type) else HARD_STALE_OPEN_JOB_TICKS):
+			reason = "stale_hard_timeout"
+		cancel(j, reason)
 		pruned += 1
 	return pruned
+
+
+func age_for_job(j: Job, tick: int) -> int:
+	if j == null:
+		return 0
+	return tick - int(j.posted_tick)
 
 
 ## Shared validity check for open-job pruning (harvest + build targets).
@@ -740,6 +887,22 @@ func is_job_target_still_valid(world: World, job: Job) -> bool:
 
 func open_count() -> int:
 	return _open.size()
+
+## PERF PASS 3: global open-job count for a specific type. Used by the
+## construction seeder to enforce a hard ceiling on build-job backlog so the
+## open board cannot grow without bound (no infinite/duplicate-spam jobs).
+func open_count_by_type(type: int) -> int:
+	var n: int = 0
+	for j in _open:
+		if int(j.type) == type:
+			n += 1
+	return n
+
+## PERF PASS 2: lightweight snapshot of open jobs so a caller can precompute
+## per-job scoring once and reuse it across multiple claim_next_for calls
+## (a single idle decision calls claim_next_for several times).
+func get_open_jobs_snapshot() -> Array:
+	return _open
 
 
 func claimed_count() -> int:
@@ -830,31 +993,31 @@ func get_open_jobs_for_profession(profession: int) -> Array[Job]:
 func _profession_to_job_types(profession: int) -> Array[int]:
 	match profession:
 		HeelKawnianData.Profession.FARMER:
-			return [_Job.Type.FORAGE, _Job.Type.PLANT_SEEDS, _Job.Type.HARVEST_CROPS, _Job.Type.GROW_FOOD, _Job.Type.BUILD_FARM_FIELD, _Job.Type.WORK_FARM_FIELD]
+			return [Job.Type.FORAGE, Job.Type.PLANT_SEEDS, Job.Type.HARVEST_CROPS, Job.Type.GROW_FOOD, Job.Type.BUILD_FARM_FIELD, Job.Type.WORK_FARM_FIELD]
 		HeelKawnianData.Profession.BUILDER:
-			return [_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER]
+			return [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_SHELTER, Job.Type.BUILD_HEARTH, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_STOCKPILE, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_LOOM, Job.Type.BUILD_KILN, Job.Type.BUILD_SMELTER]
 		HeelKawnianData.Profession.GATHERER:
-			return [_Job.Type.FORAGE, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK, _Job.Type.MINE]
+			return [Job.Type.FORAGE, Job.Type.GATHER_FLINT, Job.Type.GATHER_STICK, Job.Type.MINE]
 		HeelKawnianData.Profession.WARRIOR:
-			return [_Job.Type.HUNT, _Job.Type.PROTECT, _Job.Type.DEFEND, _Job.Type.GUARD]
+			return [Job.Type.HUNT, Job.Type.PROTECT, Job.Type.DEFEND, Job.Type.GUARD]
 		HeelKawnianData.Profession.SCHOLAR:
-			return [_Job.Type.TEACH_SKILL, _Job.Type.APPRENTICESHIP, _Job.Type.CARVE_KNOWLEDGE_STONE, _Job.Type.CARVE_LEDGER_STONE, _Job.Type.PAPER_MAKING, _Job.Type.LEATHER_MAKING, _Job.Type.INK_MAKING, _Job.Type.BOOK_BINDING, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL]
+			return [Job.Type.TEACH_SKILL, Job.Type.APPRENTICESHIP, Job.Type.CARVE_KNOWLEDGE_STONE, Job.Type.CARVE_LEDGER_STONE, Job.Type.PAPER_MAKING, Job.Type.LEATHER_MAKING, Job.Type.INK_MAKING, Job.Type.BOOK_BINDING, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_SCHOOL]
 		HeelKawnianData.Profession.TRADER:
-			return [_Job.Type.TRADE_HAUL, _Job.Type.HAUL_TO_MARKET, _Job.Type.WORK_MARKET, _Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_MARKET_STALL]
+			return [Job.Type.TRADE_HAUL, Job.Type.HAUL_TO_MARKET, Job.Type.WORK_MARKET, Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_MARKET_STALL]
 		HeelKawnianData.Profession.SMITH:
-			return [_Job.Type.CRAFT_KNIFE, _Job.Type.CRAFT_PICK, _Job.Type.CRAFT_SPEAR, _Job.Type.TOOL_MAKING, _Job.Type.BUILD_WORKSHOP, _Job.Type.WORK_WOODSHOP, _Job.Type.BUILD_SMELTER]
+			return [Job.Type.CRAFT_KNIFE, Job.Type.CRAFT_PICK, Job.Type.CRAFT_SPEAR, Job.Type.TOOL_MAKING, Job.Type.BUILD_WORKSHOP, Job.Type.WORK_WOODSHOP, Job.Type.BUILD_SMELTER]
 		HeelKawnianData.Profession.HEALER:
-			return [_Job.Type.BUILD_APOTHECARY, _Job.Type.DRY_MEAT]
+			return [Job.Type.BUILD_APOTHECARY, Job.Type.DRY_MEAT]
 		HeelKawnianData.Profession.CARPENTER:
-			return [_Job.Type.CHOP, _Job.Type.BUILD_BED, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_WOODSHOP, _Job.Type.WORK_WOODSHOP, _Job.Type.BUILD_COUNTER, _Job.Type.BUILD_CHAIR, _Job.Type.BUILD_BOAT_WORKSHOP]
+			return [Job.Type.CHOP, Job.Type.BUILD_BED, Job.Type.BUILD_DOOR, Job.Type.BUILD_WOODSHOP, Job.Type.WORK_WOODSHOP, Job.Type.BUILD_COUNTER, Job.Type.BUILD_CHAIR, Job.Type.BUILD_BOAT_WORKSHOP]
 		HeelKawnianData.Profession.COOK:
-			return [_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH, _Job.Type.DRY_MEAT, _Job.Type.BUILD_COOK_HUT, _Job.Type.WORK_COOK_HUT, _Job.Type.BUILD_BREWERY, _Job.Type.BREW_MEAD, _Job.Type.BREW_ALE]
+			return [Job.Type.COOK_MEAT, Job.Type.COOK_BERRIES, Job.Type.COOK_FISH, Job.Type.DRY_MEAT, Job.Type.BUILD_COOK_HUT, Job.Type.WORK_COOK_HUT, Job.Type.BUILD_BREWERY, Job.Type.BREW_MEAD, Job.Type.BREW_ALE]
 		HeelKawnianData.Profession.MERCHANT:
-			return [_Job.Type.TRADE_HAUL, _Job.Type.HAUL_TO_MARKET, _Job.Type.WORK_MARKET, _Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST]
+			return [Job.Type.TRADE_HAUL, Job.Type.HAUL_TO_MARKET, Job.Type.WORK_MARKET, Job.Type.BUILD_MARKET, Job.Type.BUILD_TRADING_POST]
 		HeelKawnianData.Profession.BOATWRIGHT:
-			return [_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, _Job.Type.BUILD_BOAT_WORKSHOP, _Job.Type.FISH]
+			return [Job.Type.BUILD_BOATYARD, Job.Type.BUILD_DOCK, Job.Type.BUILD_FISHERMAN_HUT, Job.Type.BUILD_BOAT_WORKSHOP, Job.Type.FISH]
 		_:
-			return [_Job.Type.FORAGE, _Job.Type.CHOP, _Job.Type.MINE, _Job.Type.HUNT]
+			return [Job.Type.FORAGE, Job.Type.CHOP, Job.Type.MINE, Job.Type.HUNT]
 
 
 ## Record a tile as failed for a job reason. Other systems (pawn abandons,
@@ -931,6 +1094,27 @@ func count_pending_jobs_near(center_tile: Vector2i, job_type: int, radius: int) 
 			n += 1
 	_pending_near_cache[near_key] = n
 	return n
+
+
+## Single-pass variant: counts open+claimed jobs near [param center_tile] for every
+## type in [param types] at once, returning a {type: count} dict. Replaces N separate
+## [method count_pending_jobs_near] scans (one per type) with one union pass, which is
+## the dominant cost in the construction seeder at high speed.
+func count_pending_by_types_near(center_tile: Vector2i, types: Array, radius: int) -> Dictionary:
+	var out: Dictionary = {}
+	if center_tile.x < 0:
+		return out
+	for t in types:
+		out[t] = 0
+	for j in get_active_jobs_union():
+		if j == null:
+			continue
+		var jt: int = int(j.type)
+		if not out.has(jt):
+			continue
+		if maxi(absi(j.tile.x - center_tile.x), absi(j.tile.y - center_tile.y)) <= radius:
+			out[jt] = int(out[jt]) + 1
+	return out
 
 
 ## Count of currently-active (open + claimed) jobs of a given type.
@@ -1052,6 +1236,49 @@ func _on_game_tick_prune(tick: int) -> void:
 	var world: World = _get_colony_world()
 	if world != null:
 		prune_stale_open_jobs(world, STALE_OPEN_JOB_TICKS)
+
+
+## Periodic job diagnostics — prints every JOB_DIAG_INTERVAL_TICKS.
+var _job_diag_last_tick: int = -1
+const JOB_DIAG_INTERVAL_TICKS: int = 600  # every ~10s at 60fps
+
+func _on_game_tick_diag(tick: int) -> void:
+	if not OS.is_debug_build():
+		return
+	if tick - _job_diag_last_tick < JOB_DIAG_INTERVAL_TICKS:
+		return
+	_job_diag_last_tick = tick
+	var open_count: int = _open.size()
+	var claimed_count: int = _claimed.size()
+	var total: int = open_count + claimed_count
+	# Count by type
+	var type_counts: Dictionary = {}
+	for job in _open:
+		var tn: String = Job.Type.keys()[job.type] if job.type >= 0 and job.type < Job.Type.size() else str(job.type)
+		type_counts[tn] = int(type_counts.get(tn, 0)) + 1
+	for job in _claimed:
+		var tn: String = Job.Type.keys()[job.type] if job.type >= 0 and job.type < Job.Type.size() else str(job.type)
+		type_counts[tn] = int(type_counts.get(tn, 0)) + 1
+	# Stale detection
+	var stale_count: int = 0
+	var current_tick: int = GameManager.tick_count if GameManager != null else 0
+	for job in _open:
+		if current_tick - job.posted_tick > 2000:
+			stale_count += 1
+	print("[JOB_DIAG] total=%d open=%d claimed=%d stale(>2000t)=%d created=%d completed=%d cancelled=%d" % [
+		total, open_count, claimed_count, stale_count,
+		_diag_created_this_window, _diag_completed_this_window, _diag_cancelled_this_window
+	])
+	# Print top types
+	var sorted_types: Array = type_counts.keys()
+	sorted_types.sort()
+	for tn in sorted_types:
+		if int(type_counts[tn]) >= 3:
+			print("[JOB_DIAG]   %s: %d" % [tn, int(type_counts[tn])])
+	# Reset window counters
+	_diag_created_this_window = 0
+	_diag_completed_this_window = 0
+	_diag_cancelled_this_window = 0
 
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:

@@ -103,6 +103,13 @@ var _SocialDynamics: Variant = null
 var _SettlementMemory: Variant = null
 var _PawnAccess: Variant = null
 
+func _normalize_taboo(value: Variant) -> Array:
+	if value is Array:
+		return value
+	if value is String:
+		return [value]
+	return []
+
 func _ready() -> void:
 	_GameManager = get_node_or_null("/root/GameManager")
 	_WorldMemory = get_node_or_null("/root/WorldMemory")
@@ -166,7 +173,7 @@ func _update_caste_system(st: Dictionary, center: int, tick: int) -> void:
 	var trad: Variant = st.get("tradition", {})
 	var has_caste: bool = false
 	if trad is Dictionary:
-		var taboo: Array = (trad as Dictionary).get("taboo_jobs", [])
+		var taboo: Array = _normalize_taboo((trad as Dictionary).get("taboo_jobs", []))
 		var taboo_str: String = str(taboo).to_lower()
 		has_caste = "caste" in taboo_str or taboo.size() > 3
 	if not has_caste:
@@ -1033,7 +1040,7 @@ func _on_event_settlement_founded(payload: Dictionary) -> void:
 	var trad_v: Variant = payload.get("tradition", {})
 	var has_caste: bool = false
 	if trad_v is Dictionary:
-		var taboo: Array = (trad_v as Dictionary).get("taboo_jobs", [])
+		var taboo: Array = _normalize_taboo((trad_v as Dictionary).get("taboo_jobs", []))
 		has_caste = "caste" in str(taboo).to_lower() or taboo.size() > 3
 	_settlement_caste_system[center] = has_caste
 	if has_caste:

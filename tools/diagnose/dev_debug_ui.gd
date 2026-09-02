@@ -138,19 +138,12 @@ func _refresh_status() -> void:
 
 func _on_pause_toggle_pressed() -> void:
 	_append_log("Pause / Resume pressed")
-	if has_node("/root/TickManager"):
-		var tm = get_node("/root/TickManager")
-		if tm != null and tm.has_method("toggle_pause"):
-			tm.call("toggle_pause")
-			_append_log("TickManager.toggle_pause() called")
-			_refresh_status()
-			return
-	if GameManager != null:
-		if GameManager.has_method("toggle_pause"):
-			GameManager.call("toggle_pause")
-			_append_log("GameManager.toggle_pause() called")
-			_refresh_status()
-			return
+	# Pause authority is GameManager — single source, never TickManager.
+	if GameManager != null and GameManager.has_method("toggle_pause"):
+		GameManager.call("toggle_pause")
+		_append_log("GameManager.toggle_pause() called")
+		_refresh_status()
+		return
 	_append_log("Pause control not available")
 
 

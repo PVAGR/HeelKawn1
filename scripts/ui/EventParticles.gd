@@ -8,6 +8,9 @@ extends CanvasLayer
 const POLL_EVERY_N_TICKS: int = 5
 const MAX_PARTICLES_PER_POLL: int = 3
 const CLEANUP_LIFETIME: float = 1.5
+const MAX_ACTIVE_PARTICLES: int = 12  # hard cap: discard excess spawns
+
+var _active_particles: Array[Dictionary] = []  # tracks {particle_node, born_tick}
 
 # Event type → particle recipe
 const RECIPES: Dictionary = {
@@ -40,9 +43,20 @@ func initialize(world_ref: World) -> void:
 
 
 func _process(_delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
 	_tick_counter += 1
 	if _tick_counter % POLL_EVERY_N_TICKS == 0:
 		_poll_events()
+	# Purge tracked entries for particles already freed by timers
+	var i: int = 0
+	while i < _active_particles.size():
+		var entry: Dictionary = _active_particles[i]
+		var particle = entry.particle_node
+		if particle == null or not is_instance_valid(particle):
+			_active_particles.remove_at(i)
+		else:
+			i += 1
 
 
 func _poll_events() -> void:
@@ -90,7 +104,7 @@ func _poll_events() -> void:
 
 
 func _event_world_position(e: Dictionary) -> Vector2:
-	if _world == null:
+	if _world == null or not is_instance_valid(_world):
 		return Vector2.ZERO
 	# Try x/y first
 	if e.has("x") and e.has("y"):
@@ -119,6 +133,18 @@ func _event_world_position(e: Dictionary) -> Vector2:
 
 
 func _spawn_particles(event_type: String, world_pos: Vector2) -> void:
+	# Enforce hard cap on simultaneously active particle systems
+	if _active_particles.size() >= MAX_ACTIVE_PARTICLES:
+		# Remove oldest to make room
+		var oldest: Dictionary = _active_particles[0]
+		_active_particles.remove_at(0)
+		if oldest.has("particle_node") and oldest.particle_node != null:
+			var p = oldest.particle_node
+			if is_instance_valid(p):
+				p.queue_free()
+	var _elapsed_ticks: int = GameManager.tick_count if GameManager != null else 0
+	var born_tick: int = _elapsed_ticks
+
 	var recipe: Dictionary = RECIPES.get(event_type, {})
 	if recipe.is_empty():
 		return
@@ -148,6 +174,12 @@ func _spawn_particles(event_type: String, world_pos: Vector2) -> void:
 
 	add_child(particles)
 	particles.emitting = true
+
+	# Track for cap enforcement
+	_active_particles.append({
+		"particle_node": particles,
+		"born_tick": GameManager.tick_count if GameManager != null else 0
+	})
 
 	# Cleanup timer
 	var cleanup: Timer = Timer.new()

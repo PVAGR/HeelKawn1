@@ -28,9 +28,6 @@ static func _get_instance() -> RoadMemory:
 
 
 func _ready() -> void:
-	if not _ready_connected:
-		_ready_connected = true
-		GameManager.game_tick.connect(_on_game_tick)
 	_ensure_size()
 
 

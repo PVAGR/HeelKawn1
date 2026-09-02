@@ -33,6 +33,7 @@ var _active_notifications: Array[Dictionary] = []
 var _notification_id_counter: int = 0
 var _last_notification_time: float = 0.0  # PERFORMANCE: Throttle notification spam
 var _pending_notifications: Array[Dictionary] = []  # PERFORMANCE: Batch similar events
+var _ui_update_accumulator: float = 0.0
 
 
 func _ready() -> void:
@@ -42,6 +43,12 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
+	_ui_update_accumulator += delta
+	if _ui_update_accumulator < 0.25:
+		return
+	_ui_update_accumulator = 0.0
 	_update_notifications(delta)
 
 

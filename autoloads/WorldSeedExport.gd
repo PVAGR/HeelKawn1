@@ -102,27 +102,28 @@ func _export_settlements() -> Array:
 func _export_pawns() -> Array:
 	var pawns: Array = []
 	
-	# Get pawns from PawnSpawner
+	# Get pawns from PawnSpawner (pawn nodes expose HeelKawnianData via .data)
 	var spawner: Node = get_node_or_null("/root/Main/WorldViewport/PawnSpawner")
-	if spawner == null or not spawner.has_method("get_all_pawn_data"):
+	if spawner == null or not spawner.has_method("get_all_pawns"):
 		return pawns
 	
-	var pawn_data_list: Array = spawner.call("get_all_pawn_data")
-	for pd in pawn_data_list:
-		if pd is RefCounted:
-			var export: Dictionary = {
-				"id": pd.id if pd.has("id") else -1,
-				"display_name": pd.display_name if pd.has("display_name") else "Unknown",
-				"age": pd.age if pd.has("age") else 0,
-				"gender": pd.gender if pd.has("gender") else 0,
-				"profession": pd.profession if pd.has("profession") else -1,
-				"skills": pd.skills.duplicate() if pd.has("skills") else {},
-				"parent_a_id": pd.parent_a_id if pd.has("parent_a_id") else -1,
-				"parent_b_id": pd.parent_b_id if pd.has("parent_b_id") else -1,
-				"children_ids": pd.children_ids.duplicate() if pd.has("children_ids") else [],
-				"is_dead": pd.is_dead if pd.has("is_dead") else false,
-			}
-			pawns.append(export)
+	for pawn in spawner.call("get_all_pawns"):
+		var pd = pawn.data if pawn != null and pawn.get("data") != null else null
+		if pd == null:
+			continue
+		var export: Dictionary = {
+			"id": pd.id if pd.has("id") else -1,
+			"display_name": pd.display_name if pd.has("display_name") else "Unknown",
+			"age": pd.age if pd.has("age") else 0,
+			"gender": pd.gender if pd.has("gender") else 0,
+			"profession": pd.profession if pd.has("profession") else -1,
+			"skills": pd.skills.duplicate() if pd.has("skills") else {},
+			"parent_a_id": pd.parent_a_id if pd.has("parent_a_id") else -1,
+			"parent_b_id": pd.parent_b_id if pd.has("parent_b_id") else -1,
+			"children_ids": pd.children_ids.duplicate() if pd.has("children_ids") else [],
+			"is_dead": pd.is_dead if pd.has("is_dead") else false,
+		}
+		pawns.append(export)
 	
 	return pawns
 

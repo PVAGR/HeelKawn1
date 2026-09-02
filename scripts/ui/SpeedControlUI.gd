@@ -79,11 +79,12 @@ func _connect_to_tick_manager() -> void:
 
 
 func _on_pause_pressed() -> void:
-	if TickMgr == null:
+	# Pause button routes to GameManager — the SINGLE pause authority.
+	if GameManager == null:
 		return
-	TickMgr.toggle_pause()
+	GameManager.toggle_pause()
 	_update_pause_button()
-	pause_toggled.emit(TickMgr.is_paused())
+	pause_toggled.emit(GameManager.is_paused)
 
 
 func _on_speed_pressed(speed_idx: int) -> void:
@@ -105,9 +106,8 @@ func _update_button_highlight() -> void:
 
 
 func _update_pause_button() -> void:
-	if TickMgr == null:
-		return
-	if TickMgr.is_paused():
+	var paused: bool = GameManager.is_paused if GameManager != null else false
+	if paused:
 		pause_button.text = "Resume"
 	else:
 		pause_button.text = "Pause"
@@ -129,23 +129,23 @@ func set_speed(multiplier: float) -> void:
 	_update_speed_label()
 
 
-## Public method to pause/resume
+## Public method to pause/resume — routes to GameManager (single pause authority).
 func pause_game() -> void:
-	if TickMgr == null:
+	if GameManager == null:
 		return
-	TickMgr.pause()
+	GameManager.pause()
 	_update_pause_button()
 
 
 func resume_game() -> void:
-	if TickMgr == null:
+	if GameManager == null:
 		return
-	TickMgr.resume()
+	GameManager.resume()
 	_update_pause_button()
 
 
 func toggle_pause_game() -> void:
-	if TickMgr == null:
+	if GameManager == null:
 		return
-	TickMgr.toggle_pause()
+	GameManager.toggle_pause()
 	_update_pause_button()

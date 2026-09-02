@@ -136,8 +136,13 @@ func _normalize_tradition(t: Dictionary) -> Dictionary:
 	if branch.is_empty():
 		branch = "agriculture"
 	out["preferred_tech_branch"] = branch
-	var taboo: Array = t.get("taboo_jobs", [])
-	out["taboo_jobs"] = taboo.duplicate(true) if taboo is Array else []
+	var taboo_raw: Variant = t.get("taboo_jobs", [])
+	var taboo: Array = []
+	if taboo_raw is Array:
+		taboo = taboo_raw
+	elif taboo_raw is String:
+		taboo = [taboo_raw]
+	out["taboo_jobs"] = taboo.duplicate(true)
 	var naming: String = str(t.get("naming_convention", DEFAULT_NAMING_CONVENTION))
 	if not naming in KNOWN_NAMING_CONVENTIONS:
 		naming = DEFAULT_NAMING_CONVENTION

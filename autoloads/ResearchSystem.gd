@@ -223,8 +223,8 @@ func _get_max_concurrent_projects(pop: int, center: int) -> int:
 		var era: int = era_node.get_settlement_era(center)
 		base_max += int(era / 2)
 	var lib_node := get_node_or_null("/root/LibrarySystem")
-	if lib_node != null and lib_node.has_method("has_library"):
-		if lib_node.has_library(center):
+	if lib_node != null and lib_node.has_method("has_any_library_at"):
+		if lib_node.has_any_library_at(center):
 			base_max += 1
 	return mini(base_max, 8)
 
@@ -254,8 +254,8 @@ func start_research(center: int, category: int, tick: int) -> bool:
 	var knowledge_level: float = _get_knowledge_level_in_category(ks, center, category)
 	var lib := get_node_or_null("/root/LibrarySystem")
 	var scholar_bonus: float = BASE_SCHOLAR_PROGRESS
-	if lib != null and lib.has_method("get_scholar_count"):
-		scholar_bonus += float(lib.get_scholar_count(center)) * SCHOLAR_PER_LIBRARY_PROGRESS
+	if lib != null and lib.has_method("get_settlement_scholar_count"):
+		scholar_bonus += float(lib.get_settlement_scholar_count(center)) * SCHOLAR_PER_LIBRARY_PROGRESS
 	var era_node := get_node_or_null("/root/TechnologyEras")
 	var era_speed: float = ERA_BASE_SPEED
 	if era_node != null and era_node.has_method("get_settlement_era"):
@@ -271,8 +271,8 @@ func start_research(center: int, category: int, tick: int) -> bool:
 		cost,
 		tick
 	)
-	if lib != null and lib.has_method("get_scholar_count"):
-		var scholar_count: int = lib.get_scholar_count(center)
+	if lib != null and lib.has_method("get_settlement_scholar_count"):
+		var scholar_count: int = lib.get_settlement_scholar_count(center)
 		for sid_idx in range(mini(scholar_count, 5)):
 			var fake_scholar_id: int = center * 1000 + sid_idx
 			if not (fake_scholar_id in rp.contributing_scholars):
@@ -421,8 +421,8 @@ func _calculate_progress_rate(center: int, category: int, st: Dictionary, rp: Re
 	rate += float(pop) * SCHOLAR_PER_POP_PROGRESS
 	rate += knowledge_level * KNOWLEDGE_LEVEL_PROGRESS_FACTOR
 	var lib := get_node_or_null("/root/LibrarySystem")
-	if lib != null and lib.has_method("get_scholar_count"):
-		rate += float(lib.get_scholar_count(center)) * SCHOLAR_PER_LIBRARY_PROGRESS
+	if lib != null and lib.has_method("get_settlement_scholar_count"):
+		rate += float(lib.get_settlement_scholar_count(center)) * SCHOLAR_PER_LIBRARY_PROGRESS
 	var era_node := get_node_or_null("/root/TechnologyEras")
 	if era_node != null and era_node.has_method("get_settlement_era"):
 		var era: int = era_node.get_settlement_era(center)

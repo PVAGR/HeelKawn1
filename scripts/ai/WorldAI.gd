@@ -105,11 +105,17 @@ class ClimatePattern extends RefCounted:
 var current_age: WorldAge = WorldAge.PRIMAL
 var technological_tier: TechnologicalTier = TechnologicalTier.STONE
 var world_events: Array[WorldEvent] = []
+const MAX_WORLD_EVENTS: int = 2048  # OPTIMIZATION: cap to prevent unbounded O(N) scans
+const MAX_EMERGENT_PATTERNS: int = 32  # OPTIMIZATION: low cap — patterns at conf=0.00 are noise; _apply_pattern_persistence scans all
 var technological_discoveries: Array[TechnologicalDiscovery] = []
 var climate_patterns: Array[ClimatePattern] = []
 var active_settlements: Dictionary = {}  # settlement_id -> SettlementAI
 var world_population: int = 0
 var total_cultural_influence: float = 0.0
+
+# OPTIMIZATION: tick-stamped pawn count cache to avoid redundant PawnAccess scans
+var _cached_pawn_count: int = 0
+var _cached_pawn_count_tick: int = -1
 
 # Historical tracking
 var major_turning_points: Array[String] = []
@@ -145,6 +151,12 @@ var environmental_neural_network: Dictionary = {}  # Environmental AI
 var cultural_neural_network: Dictionary = {}  # Cultural AI
 var economic_neural_network: Dictionary = {}  # Economic AI
 
+# Forward-propagate weight cache. The per-network weight matrix depends only on
+# (network_type, i, j) via deterministic streams (no tick/salt), so it is constant
+# for the lifetime of the world. Regenerating it on every call costs ~2048 WorldRNG
+# hashes per network (~6ms) — cache it once per network type instead.
+var _forward_weights_cache: Dictionary = {}
+
 # Neural Network Evolution Parameters
 var neural_evolution_rate: float = 0.005  # Rate of neural network evolution (increased for faster learning)
 var pattern_emergence_threshold: float = 0.7  # Threshold for emergent patterns (lowered for more frequent patterns)
@@ -169,9 +181,102 @@ const LEARN_MAX_EVENTS_PER_UPDATE: int = 64
 const LEARN_EVENT_TICK_WINDOW: int = 1000
 var _last_learned_event_eid: int = 0
 var _cached_pawn_spawner: WeakRef = null
-## One full [method get_pawn_neural_state] resolve per pawn per sim tick (forward + matrix + nudge).
-var _pawn_neural_cache_tick: int = -1
+## 02A B1: Deterministic per-pawn neural-state cache.
+## [method get_pawn_neural_state] performs the full per-pawn neural resolve
+## (input vector, forward_propagate, decision-rule context, matrix evaluate,
+## soul/society nudge) — the single most expensive pawn-dispatch function
+## (headless 200x: ~26ms per resolve; ~40-80ms on a mature live world at 1x
+## where every idle pawn rebuilt EVERY tick). All resolve inputs are pure
+## deterministic functions of tick + pawn data, so caching the result across
+## sim ticks and skipping the resolve for bounded-stale, trigger-unchanged
+## reads is deterministic (cache hits skip identical work on every run; the
+## WorldRNG streams rely on the index_for stateless pure-function property so
+## skipped calls cannot reorder later draws). Invariant: a cache HIT must never
+## skip a value whose inputs changed in a way that would change the decision.
+## The signature (_pawn_neural_state_sig / _matches) covers the exact inputs
+## get_pawn_neural_state consumes that a consumer could observe changing:
+## region key, settlement center region, need buckets (hunger/thirst/mood/rest),
+## scar count (drives the soul/society nudge). Pawn id + unique soul id are
+## implicitly stable within a pawn's lifetime. Everything else the resolve
+## reads (ColonySimServices pressures, WorldMeaning tags, founding blend,
+## weather, work toggles, affinities) is macro/slow-moving and bounded by the
+## ever-present tick TTL below, keeping the stale window small.
+const NEURAL_STATE_CACHE_TTL_TICKS: int = 8
 var _pawn_neural_cache: Dictionary = {}
+
+## Gated neural-cache profiler counters (--profile-pawn-dispatch).
+## Inert when profiling is off: no timing, no RNG, no state influence.
+static var _nc_profiling: bool = false
+static var _nc_profiling_checked: bool = false
+var _nc_hits: int = 0
+var _nc_miss_ttl: int = 0
+var _nc_miss_sig: int = 0
+var _nc_compute_count: int = 0
+var _nc_compute_us: int = 0
+
+## Per-phase cache-miss compute split (--profile-pawn-dispatch only).
+var _nc_input_vector_us: int = 0
+var _nc_forward_us: int = 0
+var _nc_rule_context_us: int = 0
+var _nc_rule_eval_us: int = 0
+var _nc_output_nudge_us: int = 0
+var _nc_result_cache_write_us: int = 0
+
+static func _nc_on() -> bool:
+	if not _nc_profiling_checked:
+		_nc_profiling_checked = true
+		_nc_profiling = OS.get_cmdline_args().has("--profile-pawn-dispatch") \
+				or OS.get_cmdline_user_args().has("--profile-pawn-dispatch")
+	return _nc_profiling
+
+func _nc_print() -> void:
+	if not _nc_on():
+		return
+	print("[NEURAL_CACHE_PROFILE] hits=%d miss_ttl=%d miss_sig=%d compute_count=%d compute_total_us=%d" % [
+		_nc_hits, _nc_miss_ttl, _nc_miss_sig, _nc_compute_count, _nc_compute_us])
+	print("[NEURAL_CACHE_SPLIT] input_vector_us=%d forward_us=%d rule_context_us=%d rule_eval_us=%d output_nudge_us=%d result_cache_write_us=%d" % [
+		_nc_input_vector_us, _nc_forward_us, _nc_rule_context_us, _nc_rule_eval_us,
+		_nc_output_nudge_us, _nc_result_cache_write_us])
+	## Reset after print so the next window is clean.
+	_nc_hits = 0
+	_nc_miss_ttl = 0
+	_nc_miss_sig = 0
+	_nc_compute_count = 0
+	_nc_compute_us = 0
+	_nc_input_vector_us = 0
+	_nc_forward_us = 0
+	_nc_rule_context_us = 0
+	_nc_rule_eval_us = 0
+	_nc_output_nudge_us = 0
+	_nc_result_cache_write_us = 0
+func _pawn_neural_state_sig(pd: HeelKawnianData) -> Dictionary:
+	var rk: int = -1
+	if WorldMemory != null:
+		rk = WorldMemory._region_key(int(pd.tile_pos.x), int(pd.tile_pos.y))
+	var center: int = -1
+	if SettlementMemory != null:
+		center = int(SettlementMemory.get_center_region_for_region(rk))
+	return {
+		"region_key": rk,
+		"settlement_center": center,
+		"need_bucket": int(pd.hunger / 12.5) + int(pd.thirst / 12.5) * 13 + int(pd.mood / 12.5) * 169 + int(pd.rest / 12.5) * 2197,
+		"scar_count": pd.physical_scars.size(),
+	}
+func _pawn_neural_state_sig_matches(pd: HeelKawnianData, sig: Dictionary) -> bool:
+	if int(sig.get("scar_count", -1)) != pd.physical_scars.size():
+		return false
+	var rk: int = -1
+	if WorldMemory != null:
+		rk = WorldMemory._region_key(int(pd.tile_pos.x), int(pd.tile_pos.y))
+	if int(sig.get("region_key", -2)) != rk:
+		return false
+	var center: int = -1
+	if SettlementMemory != null:
+		center = int(SettlementMemory.get_center_region_for_region(rk))
+	if int(sig.get("settlement_center", -3)) != center:
+		return false
+	var bucket: int = int(pd.hunger / 12.5) + int(pd.thirst / 12.5) * 13 + int(pd.mood / 12.5) * 169 + int(pd.rest / 12.5) * 2197
+	return int(sig.get("need_bucket", -4)) == bucket
 var _squad_coordinator: Node = null
 
 func _get_squad_coordinator() -> Node:
@@ -549,7 +654,24 @@ func _setup_initial_discoveries() -> void:
 
 # === Main Update Functions ===
 
+## OPTIMIZATION: cached pawn count — avoids O(P) scan per caller per tick
+func _get_cached_pawn_count() -> int:
+	if GameManager != null:
+		var tick: int = GameManager.tick_count
+		if _cached_pawn_count_tick == tick:
+			return _cached_pawn_count
+		_cached_pawn_count_tick = tick
+	var pawns: Array = PawnAccess.find_pawns()
+	_cached_pawn_count = pawns.size()
+	return _cached_pawn_count
+
 func update() -> void:
+	# OPTIMIZATION: cap world_events to prevent unbounded O(N) scans.
+	# Events are appended newest-at-end; resize() keeps oldest (wrong).
+	# Instead, drop the oldest events to preserve the most recent ones.
+	if world_events.size() > MAX_WORLD_EVENTS:
+		var excess: int = world_events.size() - MAX_WORLD_EVENTS
+		world_events = world_events.slice(excess)
 	# Update world state based on neural network processing
 	_update_neural_world_matrix()
 	_process_climate_patterns()
@@ -1078,8 +1200,8 @@ func _update_knowledge_neurons(cult_neurons: Dictionary) -> void:
 	# Get knowledge distribution metrics
 	var carrier_count: int = KnowledgeSystem.get_total_carrier_count()
 	var total_knowledge: int = KnowledgeSystem.get_total_knowledge_count()
-	var pawns: Array = PawnAccess.find_pawns()
-	var pawn_count: int = pawns.size()
+	# OPTIMIZATION: use cached pawn count instead of PawnAccess.find_pawns().size()
+	var pawn_count: int = _get_cached_pawn_count()
 	
 	if pawn_count > 0:
 		# Knowledge distribution: ratio of carriers to total pawns
@@ -1978,9 +2100,18 @@ func _detect_emergent_patterns() -> void:
 	# Apply pattern persistence - detected patterns influence future neural weights
 	_apply_pattern_persistence()
 	
+	# PERF: Prune zero-confidence patterns first — they're noise that bloats scans.
+	if emergent_patterns.size() > 8:
+		emergent_patterns = emergent_patterns.filter(func(p: Dictionary) -> bool:
+			return p.get("confidence", 0.0) > 0.01
+		)
+
 	if pattern_score >= pattern_emergence_threshold:
 		var new_pattern = _create_emergent_pattern()
 		emergent_patterns.append(new_pattern)
+		# Cap to prevent unbounded growth in _apply_pattern_persistence scans
+		if emergent_patterns.size() > MAX_EMERGENT_PATTERNS:
+			emergent_patterns = emergent_patterns.slice(emergent_patterns.size() - MAX_EMERGENT_PATTERNS)
 		_apply_emergent_pattern_effects(new_pattern)
 
 func _apply_pattern_persistence() -> void:
@@ -2893,17 +3024,15 @@ func _extract_technological_input() -> Array[float]:
 func _forward_propagate_network(input: Array[float], network: Dictionary) -> Dictionary:
 	var output: Dictionary = {}
 	var network_type: String = str(network.get("type", "generic"))
-	
+
 	# Simple forward propagation simulation
 	var hidden_layer: Array[float] = []
+	var weights: Array = _get_forward_weights(network_type)
 	for i in range(32):  # Hidden layer size
 		var sum = 0.0
+		var row: Array = weights[i]
 		for j in range(min(input.size(), 64)):
-			sum += input[j] * _deterministic_range(
-				"forward:%s:%d:%d" % [network_type, i, j],
-				-1.0,
-				1.0
-			)
+			sum += input[j] * row[j]
 		hidden_layer.append(_sigmoid(sum))
 	
 	# Output layer
@@ -2915,6 +3044,22 @@ func _forward_propagate_network(input: Array[float], network: Dictionary) -> Dic
 	output["adaptation_rate"] = hidden_layer[5]
 	
 	return output
+
+
+func _get_forward_weights(network_type: String) -> Array:
+	# Cached deterministic weight matrix (32x64) for a network type. Values come from
+	# the same WorldRNG streams as before, so determinism is unchanged.
+	var cached: Variant = _forward_weights_cache.get(network_type, null)
+	if cached is Array:
+		return cached as Array
+	var built: Array = []
+	for i in range(32):
+		var row: Array = []
+		for j in range(64):
+			row.append(_deterministic_range("forward:%s:%d:%d" % [network_type, i, j], -1.0, 1.0))
+		built.append(row)
+	_forward_weights_cache[network_type] = built
+	return built
 
 func _interpret_civilization_output(output: Dictionary) -> Dictionary:
 	var interpreted: Dictionary = {}
@@ -3265,16 +3410,34 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	if pd == null:
 		return {}
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
-	if _pawn_neural_cache_tick != tick_now:
-		_pawn_neural_cache.clear()
-		_pawn_neural_cache_tick = tick_now
-	if _pawn_neural_cache.has(pawn_id):
-		return _pawn_neural_cache[pawn_id]
+	var nc_on: bool = false
+	if _nc_profiling or _nc_on():
+		nc_on = true
+	var entry: Variant = _pawn_neural_cache.get(pawn_id)
+	if entry is Dictionary:
+		if tick_now - int(entry.get("resolve_tick", -1)) < NEURAL_STATE_CACHE_TTL_TICKS and _pawn_neural_state_sig_matches(pd, entry.get("sig", {})):
+			if nc_on:
+				_nc_hits += 1
+			return entry.get("state", {})
+		if nc_on:
+			if tick_now - int(entry.get("resolve_tick", -1)) >= NEURAL_STATE_CACHE_TTL_TICKS:
+				_nc_miss_ttl += 1
+			else:
+				_nc_miss_sig += 1
+		_pawn_neural_cache.erase(pawn_id)
 	pd.ensure_soul_identity()
+	var nc_start: int = Time.get_ticks_usec() if nc_on else 0
+	var nc_t0: int = nc_start
 	var inputs: Array[float] = _pawn_neural_input_vector(pd)
+	if nc_on:
+		_nc_input_vector_us += Time.get_ticks_usec() - nc_t0
+		nc_t0 = Time.get_ticks_usec()
 	var outputs_full: Array[float] = []
 	if pd.neural_network != null and pd.neural_network.has_method("forward_propagate"):
 		outputs_full = pd.neural_network.forward_propagate(inputs)
+	if nc_on:
+		_nc_forward_us += Time.get_ticks_usec() - nc_t0
+		nc_t0 = Time.get_ticks_usec()
 	if outputs_full.is_empty():
 		return {"inputs": inputs, "outputs": [], "soul_id": pd.unique_id}
 	var outs: Array = []
@@ -3282,7 +3445,13 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	for i in range(nslice):
 		outs.append(outputs_full[i])
 	var rule_ctx: Dictionary = _pawn_decision_rule_context(pd)
+	if nc_on:
+		_nc_rule_context_us += Time.get_ticks_usec() - nc_t0
+		nc_t0 = Time.get_ticks_usec()
 	var rule_pack: Variant = _pawn_decision_rule_matrix().evaluate(pd, rule_ctx, outs)
+	if nc_on:
+		_nc_rule_eval_us += Time.get_ticks_usec() - nc_t0
+		nc_t0 = Time.get_ticks_usec()
 	var decision_rules: Array = []
 	var human_channels: Array = []
 	if rule_pack is Dictionary:
@@ -3291,6 +3460,9 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 	else:
 		decision_rules = rule_pack as Array
 	_apply_soul_society_output_nudge(pd, outs)
+	if nc_on:
+		_nc_output_nudge_us += Time.get_ticks_usec() - nc_t0
+		nc_t0 = Time.get_ticks_usec()
 	var result: Dictionary = {
 		"inputs": inputs,
 		"outputs": outs,
@@ -3302,7 +3474,17 @@ func get_pawn_neural_state(pawn_id: int) -> Dictionary:
 		"human_channels": human_channels,
 		"human_channel_labels": _PAWN_DECISION_RULES.HUMAN_CHANNEL_LABELS,
 	}
-	_pawn_neural_cache[pawn_id] = result
+	if nc_on:
+		_nc_result_cache_write_us += Time.get_ticks_usec() - nc_t0
+	_pawn_neural_cache[pawn_id] = {
+		"resolve_tick": tick_now,
+		"sig": _pawn_neural_state_sig(pd),
+		"state": result,
+	}
+	if nc_on:
+		_nc_compute_count += 1
+		if nc_start > 0:
+			_nc_compute_us += Time.get_ticks_usec() - nc_start
 	return result
 
 

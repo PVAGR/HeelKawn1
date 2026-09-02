@@ -4,6 +4,11 @@ extends Node
 
 const PROFILE_WINDOW_TICKS: int = 300
 
+## Enabled by --profile-sim flag. All record_* methods and time-guards
+## in HeelKawnian/TickManager/PathFinder check this before calling
+## Time.get_ticks_usec().
+var _profile_sim_enabled: bool = false
+
 var _window_start_tick: int = -1
 var _window_count: int = 0
 
@@ -98,13 +103,37 @@ var vis_pawns_with_path: int = 0
 var vis_pawns_redrawing: int = 0
 
 
+func _ready() -> void:
+	_profile_sim_enabled = OS.get_cmdline_args().has("--profile-sim") \
+			or OS.get_cmdline_user_args().has("--profile-sim")
+
+
 func begin_window(tick: int) -> void:
 	if _window_start_tick < 0:
 		_window_start_tick = tick
 	_window_count += 1
 
 
+## Read-only peak into the current measurement window. Counters are CUMULATIVE
+## totals over `get_window_count()` ticks since the last window reset, NOT
+## single-tick samples. Exposed so diagnostics can label them truthfully.
+func get_window_count() -> int:
+	return _window_count
+
+
+func get_window_start_tick() -> int:
+	return _window_start_tick
+
+
+func get_pawn_sample_count() -> int:
+	return _pawn_times.size()
+
+
+func is_enabled() -> bool:
+	return _profile_sim_enabled
+
 func record_pawn_time(us: int) -> void:
+	if not _profile_sim_enabled: return
 	_pawn_times.append(us)
 	cat_total_heelkawnian += us
 	if us > cat_worst_heelkawnian:
@@ -112,6 +141,7 @@ func record_pawn_time(us: int) -> void:
 
 
 func record_category(cat: String, us: int) -> void:
+	if not _profile_sim_enabled: return
 	match cat:
 		"bookkeeping": cat_bookkeeping += us
 		"needs": cat_needs += us
@@ -127,6 +157,7 @@ func record_category(cat: String, us: int) -> void:
 
 
 func record_state(state: String, us: int) -> void:
+	if not _profile_sim_enabled: return
 	match state:
 		"IDLE": st_idle_calls += 1; st_idle_us += us
 		"WORKING": st_working_calls += 1; st_working_us += us
@@ -143,6 +174,7 @@ func record_state(state: String, us: int) -> void:
 
 
 func record_idle(cat: String, us: int) -> void:
+	if not _profile_sim_enabled: return
 	match cat:
 		"emergency": idle_emergency_calls += 1; idle_emergency_us += us
 		"food": idle_food_calls += 1; idle_food_us += us
@@ -161,6 +193,7 @@ func record_idle(cat: String, us: int) -> void:
 
 
 func record_work(cat: String, us: int) -> void:
+	if not _profile_sim_enabled: return
 	match cat:
 		"validation": work_validation_calls += 1; work_validation_us += us
 		"efficiency": work_efficiency_calls += 1; work_efficiency_us += us
@@ -171,6 +204,7 @@ func record_work(cat: String, us: int) -> void:
 
 
 func record_counter(counter: String, delta: int = 1) -> void:
+	if not _profile_sim_enabled: return
 	match counter:
 		"awareness_refresh": cnt_awareness_refresh += delta
 		"alive_pawn_scans": cnt_alive_pawn_scans += delta
@@ -186,10 +220,12 @@ func record_counter(counter: String, delta: int = 1) -> void:
 
 
 func record_ai_agent(us: int) -> void:
+	if not _profile_sim_enabled: return
 	cat_ai_total += us
 
 
 func record_ai_subcategory(cat: String, us: int) -> void:
+	if not _profile_sim_enabled: return
 	match cat:
 		"world_ai": cat_ai_world_ai += us
 		"settlement_ai": cat_ai_settlement_ai += us
@@ -198,15 +234,18 @@ func record_ai_subcategory(cat: String, us: int) -> void:
 
 
 func record_main_dispatch(us: int) -> void:
+	if not _profile_sim_enabled: return
 	cat_main_dispatch += us
 
 
 func record_pawn_process(us: int) -> void:
+	if not _profile_sim_enabled: return
 	cat_pawn_process += us
 	_pawn_process_samples += 1
 
 
 func record_pawn_draw(us: int) -> void:
+	if not _profile_sim_enabled: return
 	cat_pawn_draw += us
 	_pawn_draw_samples += 1
 

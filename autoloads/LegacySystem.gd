@@ -77,10 +77,6 @@ func _get_pawn_spawner() -> PawnSpawner:
 	return _main.get_node_or_null("WorldViewport/PawnSpawner") as PawnSpawner
 
 
-func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
-
-
 func _on_game_tick(tick: int) -> void:
 	# Legacy scoring runs periodically
 	if GameManager.periodic_phase_due(tick, LEGACY_TICK_INTERVAL, LEGACY_PHASE_OFFSET):

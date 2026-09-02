@@ -26,6 +26,7 @@ var _world_env: WorldEnvironment = null
 
 ## Particle system reference (if using GPUParticles2D/3D for ambient effects)
 var _ambient_particles: Node = null
+var _ui_update_accumulator: float = 0.0
 
 
 func _ready() -> void:
@@ -52,7 +53,11 @@ func _ready() -> void:
 	_update_meaning_snapshot()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_ui_update_accumulator += delta
+	if _ui_update_accumulator < 0.25:
+		return
+	_ui_update_accumulator = 0.0
 	# Process active transitions
 	for rk in _transitions.keys():
 		var ts: Dictionary = _transitions[rk]

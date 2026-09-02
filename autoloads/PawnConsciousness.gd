@@ -73,7 +73,6 @@ const TRAUMA_TYPES: Array[String] = [
 
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_game_tick)
 	_world_memory = get_node_or_null("/root/WorldMemory")
 	_survival_system = get_node_or_null("/root/SurvivalSystem")
 

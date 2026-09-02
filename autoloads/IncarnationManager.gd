@@ -16,11 +16,6 @@ var _incarnations: Dictionary = {}
 var _pawn_to_player: Dictionary = {}
 
 
-func _ready() -> void:
-	if GameManager != null and GameManager.has_signal("game_tick"):
-		GameManager.game_tick.connect(_on_game_tick)
-
-
 func _on_game_tick(_tick: int) -> void:
 	_passive_consciousness_processing()
 

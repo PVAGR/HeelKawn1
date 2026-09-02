@@ -95,6 +95,7 @@ const TEACHING_EFFICIENCY: float = 0.6
 
 ## How often to check skill atrophy (ticks)
 const ATROPHY_CHECK_INTERVAL: int = 10000
+const ACHIEVEMENT_CHECK_INTERVAL: int = 500
 
 # ============================================================
 # SKILL DATA
@@ -148,8 +149,9 @@ func _on_game_tick(tick: int) -> void:
 	# Check skill atrophy
 	if tick % ATROPHY_CHECK_INTERVAL == 0:
 		_check_skill_atrophy(tick)
-	# Check achievements
-	_check_achievements(tick)
+	# Check achievements (throttled — was running every tick)
+	if tick % ACHIEVEMENT_CHECK_INTERVAL == 0:
+		_check_achievements(tick)
 
 
 # ============================================================

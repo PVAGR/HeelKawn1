@@ -26,6 +26,8 @@ func _connect_signals() -> void:
 
 
 func _process(_delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
 	if tick_now - _last_sync_tick >= 90:
 		_sync_renderer_from_world()

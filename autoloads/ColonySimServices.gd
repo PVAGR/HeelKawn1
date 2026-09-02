@@ -50,6 +50,14 @@ var _pending_count_cache: Dictionary = {}
 var _pending_near_cache_tick: int = -1
 var _pending_near_cache: Dictionary = {}
 
+# OPTIMIZATION: single-pass alive pawn stats — computed once per refresh cycle
+var _pawn_stats_tick: int = -1
+var _pawn_stats_total: int = 0
+var _pawn_stats_food_carried: int = 0
+var _pawn_stats_cold_uncovered: int = 0
+var _pawn_stats_cx: int = 0
+var _pawn_stats_cy: int = 0
+
 ## Per stockpile zone tile and per STORAGE_HUT feature (matches BuildingRegistry buffs).
 const STOCKPILE_TILE_CAPACITY: int = 16
 const STORAGE_HUT_CAPACITY: int = 20
@@ -70,16 +78,14 @@ func _ready() -> void:
 
 
 func _bootstrap_demands_after_scene() -> void:
-	_refresh_food_mat_haul_pressures()
-	_refresh_housing_pressure()
-	_refresh_warmth_cooking_pressures()
-	_refresh_storage_pressure()
+	var alive_pawns: Array = PawnAccess.find_alive_pawns() if PawnAccess != null else []
+	_refresh_all_demands_immediate(alive_pawns)
 	demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
-
 
 func _on_tick(tick: int) -> void:
 	if tick % DEMAND_REFRESH_INTERVAL_TICKS == 0:
-		_refresh_all_demands_immediate()
+		var alive_pawns: Array = PawnAccess.find_alive_pawns()
+		_refresh_all_demands_immediate(alive_pawns)
 		_update_contentment_streak()
 		_update_labor_stance_from_pressures()
 		_maybe_record_famine_warning(tick)
@@ -101,16 +107,41 @@ func _pending_by_type_cached(job_type: int) -> int:
 
 
 ## Food pressure: 0 = plenty, 1 = acute shortage (simplified: inverse of food cap).
-func _refresh_all_demands_immediate() -> void:
-	_refresh_food_mat_haul_pressures()
-	_refresh_housing_pressure()
-	_refresh_warmth_cooking_pressures()
+func _refresh_all_demands_immediate(alive_pawns: Array = []) -> void:
+	_collect_pawn_stats()  # OPTIMIZATION: single O(P) pass instead of 8 separate passes
+	if alive_pawns.is_empty():
+		alive_pawns = PawnAccess.find_alive_pawns()
+	_refresh_food_mat_haul_pressures(alive_pawns)
+	_refresh_housing_pressure(alive_pawns)
+	_refresh_warmth_cooking_pressures(alive_pawns)
 	_refresh_storage_pressure()
 
+## OPTIMIZATION: single-pass collector for all pawn-derived metrics
+func _collect_pawn_stats() -> void:
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pawn_stats_tick == tick:
+		return
+	_pawn_stats_total = 0
+	_pawn_stats_food_carried = 0
+	_pawn_stats_cold_uncovered = 0
+	_pawn_stats_cx = 0
+	_pawn_stats_cy = 0
+	for p in PawnAccess.find_alive_pawns():
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		_pawn_stats_total += 1
+		_pawn_stats_cx += int(p.data.tile_pos.x)
+		_pawn_stats_cy += int(p.data.tile_pos.y)
+		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
+			_pawn_stats_food_carried += int(p.data.carrying_qty)
+		if _pawn_is_cold_without_hearth(p):
+			_pawn_stats_cold_uncovered += 1
+	_pawn_stats_tick = tick
 
-func _refresh_food_mat_haul_pressures() -> void:
+
+func _refresh_food_mat_haul_pressures(alive_pawns: Array = []) -> void:
 	var snap: Dictionary = StockpileManager.labor_pressure_stock_snapshot()
-	var food_total: int = int(snap.get("food", 0)) + _food_carried_by_pawns()
+	var food_total: int = int(snap.get("food", 0)) + _food_carried_by_pawns(alive_pawns)
 	var wood: int = int(snap.get("wood", 0))
 	var stone: int = int(snap.get("stone", 0))
 	_food_press = clamp(1.0 - float(food_total) / 30.0, 0.0, 1.0)
@@ -129,9 +160,14 @@ func _refresh_food_mat_haul_pressures() -> void:
 		_haul_press = mini(_haul_press, 0.12)
 
 
-func _food_carried_by_pawns() -> int:
+func _food_carried_by_pawns(alive_pawns: Array = []) -> int:
+	# OPTIMIZATION: use single-pass collector result
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pawn_stats_tick == tick:
+		return _pawn_stats_food_carried
+	# Fallback: iterate the provided pawn array (avoids re-scanning)
 	var total: int = 0
-	for p in PawnAccess.find_alive_pawns():
+	for p in alive_pawns:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if p.data.is_carrying() and Item.is_food(int(p.data.carrying)):
@@ -173,12 +209,13 @@ func _maybe_record_famine_warning(tick: int) -> void:
 ## 0 = enough beds (or no pawns); 1 = many pawns share few beds. Uses `World` bed
 ## list vs pawns in group `pawns` (rough macro signal, not per-night scheduling).
 ## Call from [_on_tick] on DEMAND_REFRESH_INTERVAL_TICKS, or from immediate refresh paths.
-func _refresh_housing_pressure() -> void:
+func _refresh_housing_pressure(alive_pawns: Array = []) -> void:
 	var scene_tree: SceneTree = get_tree()
 	if scene_tree == null:
 		_housing_press = 0.0
 		return
-	var pawns: int = PawnAccess.find_alive_pawns().size()
+	# OPTIMIZATION: use single-pass collector count or provided array
+	var pawns: int = _pawn_stats_total if _pawn_stats_tick == (GameManager.tick_count if GameManager != null else -1) else alive_pawns.size()
 	if pawns <= 0:
 		_housing_press = 0.0
 		return
@@ -429,6 +466,12 @@ func get_storage_pressure(center_region: int = -1) -> float:
 
 ## Living pawns below comfort temp without a fire pit within HEARTH_COVERAGE_RADIUS.
 func count_cold_uncovered_pawns(center_region: int = -1) -> int:
+	# OPTIMIZATION: use single-pass collector result for global case
+	if center_region < 0:
+		var tick: int = GameManager.tick_count if GameManager != null else -1
+		if _pawn_stats_tick == tick:
+			return _pawn_stats_cold_uncovered
+	# Per-settlement case: iterate with scope filter
 	var n: int = 0
 	for p in PawnAccess.find_alive_pawns():
 		if p == null or not is_instance_valid(p) or p.data == null:
@@ -440,8 +483,8 @@ func count_cold_uncovered_pawns(center_region: int = -1) -> int:
 	return n
 
 
-func _refresh_warmth_cooking_pressures() -> void:
-	_warmth_press = _warmth_pressure_for_scope(-1)
+func _refresh_warmth_cooking_pressures(alive_pawns: Array = []) -> void:
+	_warmth_press = _warmth_pressure_for_scope(-1, alive_pawns)
 	_cooking_press = _cooking_pressure_for_scope(-1)
 
 
@@ -555,10 +598,13 @@ func _feature_count_in_scope(feature_type: int, center_region: int) -> int:
 	return int(counts.get(feature_type, 0))
 
 
-func _warmth_pressure_for_scope(center_region: int) -> float:
+func _warmth_pressure_for_scope(center_region: int, alive_pawns: Array = []) -> float:
 	var total: int = 0
 	var cold_or_risk: int = 0
-	for p in PawnAccess.find_alive_pawns():
+	var pawns_to_check: Array = alive_pawns
+	if pawns_to_check.is_empty():
+		pawns_to_check = PawnAccess.find_alive_pawns()
+	for p in pawns_to_check:
 		if p == null or not is_instance_valid(p) or p.data == null:
 			continue
 		if not _pawn_in_scope(p, center_region):
@@ -654,6 +700,11 @@ func _hearth_count_for_scope(center_region: int) -> int:
 
 
 func _colony_centroid_tile() -> Vector2i:
+	# OPTIMIZATION: use single-pass collector result for global case
+	var tick: int = GameManager.tick_count if GameManager != null else -1
+	if _pawn_stats_tick == tick and _pawn_stats_total > 0:
+		return Vector2i(int(_pawn_stats_cx / _pawn_stats_total), int(_pawn_stats_cy / _pawn_stats_total))
+	# Fallback
 	var sx: int = 0
 	var sy: int = 0
 	var n: int = 0
@@ -672,7 +723,7 @@ func cycle_labor_stance() -> void:
 	current_labor_stance = (current_labor_stance + 1) % 4
 	if OS.is_debug_build():
 		print("[Colony] Labor stance: %s" % _stance_name(current_labor_stance))
-	_refresh_all_demands_immediate()
+	_refresh_all_demands_immediate(PawnAccess.find_alive_pawns() if PawnAccess != null else [])
 	demand_snapshot.emit(_food_press, _housing_press, _mat_press, _haul_press)
 
 

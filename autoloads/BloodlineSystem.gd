@@ -26,8 +26,6 @@ var generation_data: Dictionary = {}
 
 func _ready() -> void:
 	_refresh_next_bloodline_id()
-	if GameManager != null:
-		GameManager.game_tick.connect(_on_game_tick)
 	if EventBus != null:
 		EventBus.subscribe("pawn_birth", self, "_on_pawn_birth")
 

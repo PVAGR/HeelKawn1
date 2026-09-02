@@ -28,9 +28,7 @@ func get_settlement_pressure() -> Dictionary:
 
 
 func _ready() -> void:
-	if not _ready_tick_guard:
-		_ready_tick_guard = true
-		GameManager.game_tick.connect(_on_game_tick)
+	pass
 
 
 func _on_game_tick(tick: int) -> void:

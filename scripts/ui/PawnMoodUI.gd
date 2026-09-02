@@ -18,6 +18,7 @@ var _needs_container: VBoxContainer = null
 var _thoughts_container: VBoxContainer = null
 var _traits_container: FlowContainer = null
 var _health_label: Label = null
+var _ui_update_accumulator: float = 0.0
 
 # Need types
 const NEED_TYPES: Array[String] = ["hunger", "rest", "social", "comfort", "safety"]
@@ -285,7 +286,11 @@ func _update_health() -> void:
 
 var _last_mood_update_tick: int = -1
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_ui_update_accumulator += delta
+	if _ui_update_accumulator < 0.25:
+		return
+	_ui_update_accumulator = 0.0
 	# Update display periodically (every 10 ticks, but only once per tick)
 	if GameManager != null:
 		var cur_tick: int = GameManager.tick_count

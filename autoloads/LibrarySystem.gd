@@ -89,7 +89,10 @@ func _get_settlement_libraries(center: int) -> Array[String]:
 	var key: String = _settlement_key(center)
 	if not _settlement_library_index.has(key):
 		return []
-	return _settlement_library_index[key].duplicate()
+	var result: Array[String] = []
+	for lid in _settlement_library_index[key]:
+		result.append(str(lid))
+	return result
 
 func _index_library(center: int, library_id: String) -> void:
 	var key: String = _settlement_key(center)

@@ -13,7 +13,13 @@ var _world_event_system_loaded: bool = false
 var _world_event_seed_manager_loaded: bool = false
 
 func _ready() -> void:
-	pass
+	if GameManager != null and GameManager.has_signal("game_tick"):
+		GameManager.game_tick.connect(_forward_tick_to_children)
+
+func _forward_tick_to_children(tick: int) -> void:
+	for child in get_children():
+		if child.has_method("_on_game_tick"):
+			child._on_game_tick(tick)
 
 func _load_sub(name: String, path: String) -> Node:
 	var existing: Node = get_node_or_null("/root/" + name)

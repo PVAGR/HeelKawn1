@@ -48,6 +48,17 @@ var _last_slow_tick_log_msec: int = -1_000_000
 var _last_catchup_hint_log_msec: int = -1_000_000
 var _guild_audit_last_tick: int = -1
 
+# --- DIAGNOSTICS: throttled slow-tick logging for game_tick signal ---
+var _diag_last_gm_slow_warn_msec: int = 0
+const _DIAG_GM_SLOW_THRESH_USEC: int = 16_000  # 16 ms
+const _DIAG_GM_SLOW_WARN_THROTTLE_MSEC: int = 3000  # 3 s real time
+
+# --- DIAGNOSTICS: per-listener game_tick profiling (--profile-game-tick) ---
+var _gt_profile_enabled: bool = false
+var _gt_profile_accum: Dictionary = {}
+var _gt_profile_max: Dictionary = {}
+var _gt_profile_count: int = 0
+
 ## GDScript has no try/catch for runtime faults. When true, each [signal game_tick] slot is
 ## invoked in order with a console line naming the target — the **last line printed** before
 ## a hard stop identifies the crashing listener. Enable with CLI [code]--game-tick-trace[/code]
@@ -59,6 +70,18 @@ var last_game_tick_listener_label: String = ""
 ## Pre-allocated variables for performance
 var _conns_cache: Array = []
 var _slots_cache: Array[Callable] = []
+
+## --- Resumable game_tick cascade state (driven by TickManager's scheduler) ---
+## The heavy ~99-listener game_tick fan-out is now dispatched one callback at a
+## time by TickManager (scheduler phase 3), so the full cascade can no longer
+## block one rendered frame. Membership is frozen at tick start (tick_processed
+## completion semantics); changes during tick N take effect beginning tick N+1.
+var _gt_pending_active: bool = false
+var _gt_pending_tick: int = -1
+var _gt_pending_slots: Array = []
+var _gt_pending_index: int = 0
+var _gt_pending_total_usec: int = 0
+var _gt_pending_ct_slots: bool = false
 
 
 func _reset_frame_pacing_history() -> void:
@@ -81,14 +104,17 @@ func verbose_logs() -> bool:
 ## Lightweight read-only snapshot for HUD / tooling (tick backlog estimate in sim steps).
 func sim_diag() -> Dictionary:
 	var queued_ticks_est: float = _tick_accumulator / TICK_INTERVAL_SECONDS
-	var active_ticks_per_frame_cap: int = _max_ticks_per_frame_for_speed()
-	var acc_cap: int = _max_accumulated_ticks_for_speed()
+	var active_ticks_per_frame_cap: int = 0
+	if TickManager != null and TickManager.has_method("_max_ticks_per_frame_for_speed"):
+		active_ticks_per_frame_cap = TickManager._max_ticks_per_frame_for_speed()
+	else:
+		active_ticks_per_frame_cap = MAX_TICKS_PER_FRAME
 	return {
 		"tick_count": tick_count,
 		"speed": game_speed,
 		"paused": is_paused,
 		"max_ticks_per_frame": active_ticks_per_frame_cap,
-		"max_accumulated_ticks": acc_cap,
+		"max_accumulated_ticks": -1,  # uncapped — TickManager is sole authority
 		"accumulator_sec": _tick_accumulator,
 		"queued_ticks_est": queued_ticks_est,
 		"ticks_emitted_last_frame": ticks_emitted_last_frame,
@@ -131,14 +157,6 @@ func _maybe_log_sim_hitch(ticks_this_frame: int, frame_tick_cap: int, tick_chain
 		)
 
 
-func _max_ticks_per_frame_for_speed() -> int:
-	var caps: Dictionary = {0: 2, 1: 4, 2: 8, 3: 10, 4: 6, 5: 8}
-	return caps.get(get_speed_index(), 4)
-
-
-func _max_accumulated_ticks_for_speed() -> int:
-	return 99999  # Uncapped — no artificial backlog limits
-
 
 ## Deterministic phase helper for maintenance systems. A positive offset runs
 ## a task shortly before its old round-number boundary, spreading work while
@@ -168,7 +186,12 @@ func _ready() -> void:
 func _on_tick_manager_tick(tick_number: int) -> void:
 	## Re-emit as game_tick for backward compatibility
 	tick_count = tick_number
-	_dispatch_game_tick(tick_number)
+	## NOTE: The heavy game_tick fan-out is now dispatched by TickManager's
+	## resumable scheduler (phase 3) via begin_game_tick_dispatch()/game_tick_step()
+	## so it can no longer block one rendered frame. This handler only syncs
+	## tick_count (and fires on the lightweight tick_processed completion signal).
+	## Do NOT call _dispatch_game_tick() here, or the cascade would run twice.
+	return
 
 
 func _cmdline_contains_substring(needle: String) -> bool:
@@ -197,6 +220,8 @@ func _apply_command_line_flags() -> void:
 				trace_game_tick_dispatch = true
 			"--no-game-tick-trace":
 				trace_game_tick_dispatch = false
+			"--profile-game-tick":
+				_gt_profile_enabled = true
 
 
 func _format_game_tick_callable(cb: Callable, ordinal: int, total: int) -> String:
@@ -212,14 +237,117 @@ func _format_game_tick_callable(cb: Callable, ordinal: int, total: int) -> Strin
 	return "[%d/%d] %s :: %s" % [ordinal, total, str(obj), mid_str]
 
 
+## Freeze the current [signal game_tick] listener set for one tick and prepare
+## the resumable cascade. Called by TickManager at sim-tick start (scheduler
+## phase 3). Also sets [member tick_count] so game_tick listeners read the
+## current tick exactly as the previous synchronous path did.
+func begin_game_tick_dispatch(tick: int) -> void:
+	_gt_pending_tick = tick
+	_gt_pending_slots.clear()
+	_gt_pending_index = 0
+	_gt_pending_total_usec = 0
+	_gt_pending_ct_slots = CrashTrap.should_trace_game_tick_dispatch(tick)
+	var conns: Array = get_signal_connection_list(&"game_tick")
+	for entry_any in conns:
+		if not entry_any is Dictionary:
+			continue
+		var cb_var: Variant = (entry_any as Dictionary).get("callable", null)
+		if not cb_var is Callable:
+			continue
+		var cb: Callable = cb_var as Callable
+		if not cb.is_valid():
+			continue
+		_gt_pending_slots.append(cb)
+	tick_count = tick
+	_gt_pending_active = _gt_pending_slots.size() > 0
+	if _gt_pending_ct_slots:
+		CrashTrap.log_tick_event("dispatch_start", "tick=%d listeners=%d" % [tick, _gt_pending_slots.size()])
+
+
+## Dispatch EXACTLY ONE pending game_tick callback (scheduler phase 3 step).
+## Returns true if more callbacks remain for this tick, false when the cascade
+## (and thus the tick's game_tick phase) is complete.
+func game_tick_step(_tick: int) -> bool:
+	if not _gt_pending_active:
+		if _gt_pending_ct_slots and _gt_pending_tick >= 0:
+			CrashTrap.log_tick_event("dispatch_end", "processed %d listeners" % _gt_pending_slots.size())
+			_gt_pending_ct_slots = false
+		return false
+	var cb: Callable = _gt_pending_slots[_gt_pending_index]
+	var label: String = _format_game_tick_callable(cb, _gt_pending_index + 1, _gt_pending_slots.size())
+	last_game_tick_listener_label = label
+	if trace_game_tick_dispatch:
+		print("[GameManager] game_tick(%d) dispatch %s" % [_gt_pending_tick, label])
+	if _gt_pending_ct_slots:
+		CrashTrap.enter_system("listener:%s" % label)
+	var cb_start_us: int = Time.get_ticks_usec()
+	cb.call(_gt_pending_tick)
+	var cb_elapsed_us: int = Time.get_ticks_usec() - cb_start_us
+	_gt_pending_total_usec += cb_elapsed_us
+	if _gt_profile_enabled:
+		_gt_profile_accum[label] = int(_gt_profile_accum.get(label, 0)) + cb_elapsed_us
+		_gt_profile_max[label] = maxi(int(_gt_profile_max.get(label, 0)), cb_elapsed_us)
+	if trace_game_tick_dispatch and cb_elapsed_us >= 1000:
+		var debug_suffix: String = ""
+		var cb_obj: Object = cb.get_object()
+		if cb_obj != null and is_instance_valid(cb_obj):
+			if cb_obj.has_method("get_state_name"):
+				var st: String = str(cb_obj.call("get_state_name"))
+				var job_lbl: String = ""
+				if cb_obj.has_method("get_current_job_label"):
+					job_lbl = str(cb_obj.call("get_current_job_label"))
+				debug_suffix = " state=%s job=%s" % [st, job_lbl]
+		print(
+				"[GameManager] game_tick(%d) timing %s = %.2fms%s"
+				% [_gt_pending_tick, label, float(cb_elapsed_us) / 1000.0, debug_suffix]
+		)
+	if _gt_pending_ct_slots:
+		CrashTrap.exit_system("listener:%s" % label)
+	_gt_pending_index += 1
+	if _gt_pending_index >= _gt_pending_slots.size():
+		_gt_pending_active = false
+		if _gt_pending_ct_slots:
+			CrashTrap.log_tick_event("dispatch_end", "processed %d listeners" % _gt_pending_slots.size())
+			_gt_pending_ct_slots = false
+		# DIAGNOSTICS: throttled slow-tick warning for the full game_tick cascade.
+		if _gt_pending_total_usec > _DIAG_GM_SLOW_THRESH_USEC:
+			var now_ms: int = Time.get_ticks_msec()
+			if now_ms - _diag_last_gm_slow_warn_msec >= _DIAG_GM_SLOW_WARN_THROTTLE_MSEC:
+				_diag_last_gm_slow_warn_msec = now_ms
+				var speed_str: String = "%sx" % str(game_speed)
+				var cap_val: int = (TickManager._max_ticks_per_frame_for_speed() if TickManager != null and TickManager.has_method("_max_ticks_per_frame_for_speed") else MAX_TICKS_PER_FRAME)
+				print("[GM_DIAG] tick=%d elapsed=%dus listeners=%d speed=%s cap=%d" % [
+					_gt_pending_tick, _gt_pending_total_usec, _gt_pending_slots.size(), speed_str, cap_val
+				])
+		return false
+	return true
+
+
 ## Invokes [signal game_tick] listeners in engine order. Traced mode logs each slot first
 ## (GDScript cannot try/catch most runtime faults — see [member trace_game_tick_dispatch]).
 ## [CrashTrap] can add tick-1 per-listener ENTER/EXIT when [method CrashTrap.should_trace_game_tick_dispatch] is true.
 func _dispatch_game_tick(tick: int) -> void:
 	var ct_slots: bool = CrashTrap.should_trace_game_tick_dispatch(tick)
 	var trace_slots: bool = trace_game_tick_dispatch or ct_slots
-	if not trace_slots:
+	if not trace_slots and not _gt_profile_enabled:
+		var _gm_t0: int = Time.get_ticks_usec()
 		game_tick.emit(tick)
+		var _gm_elapsed: int = Time.get_ticks_usec() - _gm_t0
+		# DIAGNOSTICS: throttled slow-tick warning for game_tick listeners
+		if _gm_elapsed > _DIAG_GM_SLOW_THRESH_USEC:
+			var now_ms: int = Time.get_ticks_msec()
+			if now_ms - _diag_last_gm_slow_warn_msec >= _DIAG_GM_SLOW_WARN_THROTTLE_MSEC:
+				_diag_last_gm_slow_warn_msec = now_ms
+				var conn_list: Array = get_signal_connection_list(&"game_tick")
+				var listener_count: int = 0
+				for entry in conn_list:
+					if entry is Dictionary:
+						listener_count += 1
+				var speed_str: String = "%sx" % str(game_speed)
+				var cap_val: int = (TickManager._max_ticks_per_frame_for_speed() if TickManager != null and TickManager.has_method("_max_ticks_per_frame_for_speed") else MAX_TICKS_PER_FRAME)
+				print("[GM_DIAG] tick=%d elapsed=%dus listeners=%d speed=%s cap=%d" % [
+					tick, _gm_elapsed, listener_count, speed_str, cap_val
+				])
 		return
 	# Use pre-allocated cache arrays
 	_conns_cache.clear()
@@ -252,6 +380,9 @@ func _dispatch_game_tick(tick: int) -> void:
 		var cb_start_us: int = Time.get_ticks_usec()
 		cb2.call(tick)
 		var cb_elapsed_us: int = Time.get_ticks_usec() - cb_start_us
+		if _gt_profile_enabled:
+			_gt_profile_accum[label] = int(_gt_profile_accum.get(label, 0)) + cb_elapsed_us
+			_gt_profile_max[label] = maxi(int(_gt_profile_max.get(label, 0)), cb_elapsed_us)
 		if trace_game_tick_dispatch and cb_elapsed_us >= 1000:
 			var debug_suffix: String = ""
 			var cb_obj: Object = cb2.get_object()
@@ -270,6 +401,26 @@ func _dispatch_game_tick(tick: int) -> void:
 			CrashTrap.exit_system("listener:%s" % label)
 	if ct_slots:
 		CrashTrap.log_tick_event("dispatch_end", "processed %d listeners" % n)
+	if _gt_profile_enabled:
+		_gt_profile_count += 1
+		if _gt_profile_count >= 1000:
+			_gt_profile_count = 0
+			var prof_entries: Array = []
+			for pl in _gt_profile_accum:
+				prof_entries.append({"label": str(pl), "usec": int(_gt_profile_accum[pl])})
+			prof_entries.sort_custom(func(a, b): return int(a["usec"]) > int(b["usec"]))
+			for pi in range(mini(prof_entries.size(), 10)):
+				var pe: Dictionary = prof_entries[pi]
+				print("[GT_PROFILE] %s=%.2fms" % [str(pe["label"]), float(pe["usec"]) / 1000.0])
+			var max_entries: Array = []
+			for pl in _gt_profile_max:
+				max_entries.append({"label": str(pl), "usec": int(_gt_profile_max[pl])})
+			max_entries.sort_custom(func(a, b): return int(a["usec"]) > int(b["usec"]))
+			for pi in range(mini(max_entries.size(), 8)):
+				var me: Dictionary = max_entries[pi]
+				print("[GT_MAX] %s=%.2fms" % [str(me["label"]), float(me["usec"]) / 1000.0])
+			_gt_profile_accum.clear()
+			_gt_profile_max.clear()
 
 
 func _process(delta: float) -> void:
@@ -295,7 +446,12 @@ func _process(delta: float) -> void:
 	_tick_accumulator += desired_add
 	var ticks_this_frame: int = 0
 	var tick_chain_usecs: int = 0
-	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < MAX_TICKS_PER_FRAME:
+	var frame_cap: int = MAX_TICKS_PER_FRAME
+	if has_node("/root/TickManager"):
+		var tm = get_node("/root/TickManager")
+		if tm != null and tm.has_method("_max_ticks_per_frame_for_speed"):
+			frame_cap = tm._max_ticks_per_frame_for_speed()
+	while _tick_accumulator >= TICK_INTERVAL_SECONDS and ticks_this_frame < frame_cap:
 		_tick_accumulator -= TICK_INTERVAL_SECONDS
 		tick_count += 1
 		var t0: int = Time.get_ticks_usec()
@@ -303,7 +459,14 @@ func _process(delta: float) -> void:
 		tick_chain_usecs += Time.get_ticks_usec() - t0
 		ticks_this_frame += 1
 	ticks_emitted_last_frame = ticks_this_frame
-	adaptive_ticks_cap_last_frame = 99999
+	if has_node("/root/TickManager"):
+		var tm = get_node("/root/TickManager")
+		if tm != null and tm.has_method("_max_ticks_per_frame_for_speed"):
+			adaptive_ticks_cap_last_frame = tm._max_ticks_per_frame_for_speed()
+		else:
+			adaptive_ticks_cap_last_frame = MAX_TICKS_PER_FRAME
+	else:
+		adaptive_ticks_cap_last_frame = MAX_TICKS_PER_FRAME
 	last_frame_game_tick_usecs = tick_chain_usecs
 	last_frame_tick_cap_backlog = false
 
@@ -377,9 +540,8 @@ func pause() -> void:
 		return
 	is_paused = true
 	_reset_frame_pacing_history()
-	# Propagate to TickManager so tick emission actually pauses
-	if typeof(TickManager) != TYPE_NIL and TickManager != null:
-		TickManager.pause()
+	# GameManager is the SINGLE pause authority. There is nothing to push to
+	# TickManager: TickManager asks GameManager.is_paused each frame.
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -388,9 +550,8 @@ func resume() -> void:
 		return
 	is_paused = false
 	_reset_frame_pacing_history()
-	# Propagate to TickManager so tick emission actually resumes
-	if typeof(TickManager) != TYPE_NIL and TickManager != null:
-		TickManager.resume()
+	# GameManager is the SINGLE pause authority. There is nothing to push to
+	# TickManager: TickManager asks GameManager.is_paused each frame.
 	speed_changed.emit(game_speed, is_paused)
 
 
@@ -433,11 +594,10 @@ func set_state_from_load(tick: int, speed: float, paused: bool) -> void:
 	game_speed = max(speed, 0.0001)
 	is_paused = paused
 	_reset_frame_pacing_history()
-	# Sync TickManager to loaded state when present
+	# Sync TickManager's SPEED to the loaded value (speed authority stays with
+	# TickManager). Pause is NOT propagated: GameManager is the single pause
+	# authority and TickManager reads GameManager.is_paused directly, so the
+	# loaded is_paused above is already authoritative.
 	if typeof(TickManager) != TYPE_NIL and TickManager != null:
 		TickManager.set_speed(game_speed)
-		if is_paused:
-			TickManager.pause()
-		else:
-			TickManager.resume()
 	speed_changed.emit(game_speed, is_paused)

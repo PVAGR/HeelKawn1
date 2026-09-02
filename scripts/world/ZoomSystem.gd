@@ -63,6 +63,7 @@ const MAX_ENTITIES_AT_ZOOM: Dictionary = {
 # References
 @onready var _camera: Camera2D = null
 @onready var _world: Node = null
+var _ui_update_accumulator: float = 0.0
 
 
 func _ready() -> void:
@@ -78,7 +79,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Smooth zoom transition
+	# Smooth zoom transition every frame for responsive interpolation
 	if not is_equal_approx(zoom_scale, target_zoom_scale):
 		zoom_scale = lerpf(zoom_scale, target_zoom_scale, ZOOM_TRANSITION_SPEED)
 		

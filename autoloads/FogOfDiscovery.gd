@@ -39,8 +39,6 @@ var _cached_hunt_jobs_needed: int = 0
 func _ready() -> void:
 	_discovered.resize(WorldData.TILE_COUNT)
 	_discovered.fill(0)
-	if GameManager != null:
-		GameManager.game_tick.connect(_on_game_tick)
 
 
 func _exit_tree() -> void:

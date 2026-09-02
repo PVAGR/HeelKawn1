@@ -166,13 +166,13 @@ func _report_final() -> void:
 	var gm_tick: int = gm.get("tick_count") if gm != null else -1
 	var tm_tick: int = tm.get("current_tick") if tm != null else -1
 	var gm_paused: bool = bool(gm.get("is_paused")) if gm != null else true
-	var tm_paused: bool = bool(tm.get("_is_paused")) if tm != null else true
-
-	var consistency: String = "ok" if gm_tick == tm_tick and not gm_paused and not tm_paused else "MISMATCH"
+	## Pause has a SINGLE authority (GameManager.is_paused). TickManager holds no
+	## pause state, so there is nothing separate to compare for mismatch here.
+	var consistency: String = "ok" if gm_tick == tm_tick and not gm_paused else "MISMATCH"
 	if gm_tick != tm_tick:
 		consistency = "tick_desync gm=%d tm=%d" % [gm_tick, tm_tick]
-	elif gm_paused or tm_paused:
-		consistency = "paused gm=%s tm=%s" % [str(gm_paused), str(tm_paused)]
+	elif gm_paused:
+		consistency = "paused"
 
 	# Event count
 	var wmem: Node = root.get_node_or_null("WorldMemory")

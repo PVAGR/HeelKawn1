@@ -1,12 +1,73 @@
 class_name DayNightCycle
 extends CanvasModulate
 
-## Tints the entire canvas layer based on in-game time. Drives off
-## GameManager.game_tick so pause and speed multipliers behave automatically.
+## Tints the entire canvas layer based on in-game time.
+##
+## AUTHORITATIVE SOURCE (HK-TIME-ARCH-P2B): CURRENT calendar state derives from
+## SimulationClock COMMITTED canonical world time, converted back to an
+## equivalent legacy tick via the canonical bridge quantum, then fed through the
+## existing SimTime calendar functions. It MUST NOT be derived from the legacy
+## compatibility tick counter / the TARGET time / any frame delta / any local
+## elapsed counter. Current-state updates run on TickManager.tick_processed,
+## which fires AFTER legacy_core commits, so a current update always sees the
+## just-committed frontier (CURRENT_UPDATE_AFTER_COMMIT).
+##
+## Two API families:
+##   CURRENT API  — no legacy-tick argument; derives NOW from committed time:
+##                  get_current_legacy_calendar_tick() / is_night().
+##   HISTORICAL API — take an explicit legacy tick argument: is_night_for_tick(),
+##                  phase_for_tick(), sync_to_tick(), etc. Their argument is a
+##                  legacy calendar tick, NEVER canonical seconds. Retained for
+##                  unmigrated gameplay systems.
 ##
 ## Visual day length in ticks. See [SimTime] and [code]docs/TIME_SCALE.md[/code]
 ## for the canonical tick/calendar/wall-clock map.
 const TICKS_PER_DAY: int = SimTime.TICKS_PER_VISUAL_DAY
+
+## Canonical bridge quantum = canonical SimulationClock world seconds per one
+## completed legacy compatibility transaction. Resolved from the production
+## constant (HK-TIME-ARCH-P2A.1); NEVER from SimTime.TICK_INTERVAL_SECONDS (the
+## old legacy tick-domain unit is NOT a canonical second). No hardcoded fallback.
+##
+## Autoloads (TickManager/SimulationClock) are resolved at call time via the
+## SceneTree root so this script compiles in any context (scene boot or a
+## headless --script tool) without relying on bare autoload identifiers.
+static func _autoload(name: StringName) -> Node:
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null(NodePath(name))
+
+static func _bridge_quantum() -> float:
+	var tm: Node = _autoload(&"TickManager")
+	if tm == null or not ("LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION" in tm):
+		push_error("DayNightCycle: TickManager canonical bridge quantum unavailable")
+		return 0.0
+	return float(tm.LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION)
+
+## CURRENT API — the ONLY canonical -> legacy-tick conversion.
+## committed canonical seconds -> equivalent legacy calendar tick (integer).
+## Deterministic floor with a tiny epsilon proportional to q (not a large
+## arbitrary epsilon) to keep exact multiples stable. Invalid q is rejected.
+##   with Q=0.05: 0.00->0, 0.05->1, 29.95->599, 30.00->600, 1499.95->29999, 1500.00->30000
+static func canonical_seconds_to_legacy_tick(committed_seconds: float) -> int:
+	var q: float = _bridge_quantum()
+	if q <= 0.0:
+		push_error("DayNightCycle: invalid canonical bridge quantum")
+		return 0
+	return int(floorf((maxf(0.0, committed_seconds) + q * 0.000001) / q))
+
+## CURRENT API — current equivalent legacy calendar tick derived from the live
+## compatibility tick (TickManager.current_tick). The game is only partially
+## migrated to canonical time: SimulationClock COMMITTED can be held back by an
+## authoritative lane while the actual live game advances, which froze the HUD
+## calendar. The live calendar must therefore follow the live compat tick, not
+## the committed canonical frontier.
+static func get_current_legacy_calendar_tick() -> int:
+	var tm: Node = _autoload(&"TickManager")
+	if tm == null or not ("current_tick" in tm):
+		return 0
+	return int(tm.current_tick)
 
 ## Four key colors around the clock.
 ## Phase 0.00 = midnight, 0.25 = dawn, 0.50 = noon, 0.75 = dusk.
@@ -31,32 +92,62 @@ var _last_day: int = -1
 
 
 func _ready() -> void:
-	GameManager.game_tick.connect(_on_tick)
-	_apply_for_tick(GameManager.tick_count)
+	# Update AFTER legacy_core commits: tick_processed fires after _commit_legacy_core_quantum().
+	var tm: Node = _autoload(&"TickManager")
+	if tm != null and tm.has_signal("tick_processed"):
+		tm.tick_processed.connect(_on_tick)
+	_apply_for_tick(get_current_legacy_calendar_tick())
 
 
-func _on_tick(tick: int) -> void:
-	_apply_for_tick(tick)
-	var day: int = int(tick / float(TICKS_PER_DAY))
-	if day != _last_day:
+# _emit_tick is the compatibility emit counter (diagnostic); the calendar reads
+# committed canonical time, NOT this argument.
+func _on_tick(_emit_tick: int) -> void:
+	var current: int = get_current_legacy_calendar_tick()
+	_apply_for_tick(current)
+	var day: int = int(current / float(TICKS_PER_DAY))
+	# Cache state machine for day-boundary detection. `_last_day` is
+	# change-detection cache ONLY, never a time authority.
+	if _last_day < 0:
+		# initial observation: initialize cache (preserve initial rollover log).
 		_last_day = day
-		var display_day: int = day + 1
-		if _should_log_day_rollover(display_day):
-			var yr: int = SimTime.sim_year_index(tick)
-			var din: int = SimTime.visual_day_within_sim_year(tick)
-			var dmx: int = SimTime.visual_days_per_sim_year()
-			print("[DayNight] Year %d · Day %d/%d begins (tick %d)" % [yr, din, dmx, tick])
+		_log_day_begins(day)
+	elif day > _last_day:
+		# normal forward causal progression: enumerate ONLY crossed boundaries.
+		for d in range(_last_day + 1, day + 1):
+			_last_day = d
+			_log_day_begins(d)
+	elif day < _last_day:
+		# new epoch / explicit rewind or reset sync: do NOT emit historical
+		# forward boundaries, do not loop backward. Cache follows committed.
+		_last_day = day
+	# else day == _last_day: no boundary action.
+
+
+## Log a day rollover (presentation only). `day` is the 0-based day being begun;
+## the visual day begins at legacy tick day * TICKS_PER_DAY.
+func _log_day_begins(day: int) -> void:
+	var display_day: int = day + 1
+	if not _should_log_day_rollover(display_day):
+		return
+	var begin_tick: int = day * TICKS_PER_DAY
+	var yr: int = SimTime.sim_year_index(begin_tick)
+	var din: int = SimTime.visual_day_within_sim_year(begin_tick)
+	var dmx: int = SimTime.visual_days_per_sim_year()
+	print("[DayNight] Year %d · Day %d/%d begins (tick %d)" % [yr, din, dmx, begin_tick])
 
 
 func _should_log_day_rollover(display_day: int) -> bool:
 	## At 26x+ each real second spans many visual days — avoid flooding stdout.
-	if GameManager.game_speed < 26.0:
+	var gm: Node = _autoload(&"GameManager")
+	var speed: float = float(gm.game_speed) if gm != null else 1.0
+	if speed < 26.0:
 		return true
 	if not OS.is_debug_build():
 		return false
 	return display_day == 1 or (display_day % 14 == 0)
 
 
+## HISTORICAL API: takes an explicit legacy tick (NOT canonical seconds).
 ## After loading a save: snap visuals + day counter to `tick` without re-printing
 ## spurious "Day 1" lines.
 func sync_to_tick(tick: int) -> void:
@@ -109,9 +200,9 @@ static func time_band_for_tick(tick: int) -> int:
 	return TimeBand.DAY
 
 
-## Instance accessor: is "right now" nighttime, according to GameManager's clock?
+## CURRENT API: is "right now" nighttime, according to committed canonical time?
 func is_night() -> bool:
-	return is_night_for_tick(GameManager.tick_count)
+	return is_night_for_tick(get_current_legacy_calendar_tick())
 
 
 static func _color_for_phase(t: float) -> Color:

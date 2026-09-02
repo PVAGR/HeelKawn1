@@ -39,11 +39,11 @@ const VEGETATION_MAX: float = 1.0
 const POLLUTION_MIN: float = 0.0
 const POLLUTION_MAX: float = 1.0
 
-## How often to run full ecology update (ticks)
-const ECOLOGY_UPDATE_INTERVAL: int = 120
+## How often to run full ecology update (ticks) — was 120, doubled to reduce 65K-tile pass frequency
+const ECOLOGY_UPDATE_INTERVAL: int = 240
 
 ## How often to run plant growth (ticks)
-const PLANT_GROWTH_INTERVAL: int = 240
+const PLANT_GROWTH_INTERVAL: int = 480
 
 ## How often to run fire spread (ticks)
 const FIRE_SPREAD_INTERVAL: int = 30
@@ -51,11 +51,17 @@ const FIRE_SPREAD_INTERVAL: int = 30
 ## How often to run erosion (ticks)
 const EROSION_INTERVAL: int = 2000
 
-## How often to run pollution diffusion (ticks)
-const POLLUTION_INTERVAL: int = 500
+## How often to run pollution diffusion (ticks) — was 500, doubled to reduce 65K+8-neighbor cost
+const POLLUTION_INTERVAL: int = 1000
 
 ## How often to run animal migration (ticks)
 const MIGRATION_INTERVAL: int = 3000
+
+## Number of contiguous tile slices each full-map pass is spread across. The slice
+## index is derived from `tick % interval`, so every tile is still visited exactly
+## once per interval window (same formulas, same cadence), but no single tick ever
+## pays the full 65K-tile pass. Fully deterministic with no hidden RNG.
+const FULLMAP_BATCHES: int = 64
 
 ## Max fire sources tracked simultaneously
 const MAX_FIRE_SOURCES: int = 64
@@ -117,8 +123,14 @@ var _soil_quality: PackedFloat32Array = PackedFloat32Array()
 var _moisture: PackedFloat32Array = PackedFloat32Array()
 var _vegetation: PackedFloat32Array = PackedFloat32Array()
 var _pollution: PackedFloat32Array = PackedFloat32Array()
+var _pollution_prev: PackedFloat32Array = PackedFloat32Array()
 var _temperature: PackedFloat32Array = PackedFloat32Array()
 var _initialized: bool = false
+
+## Cached world-data reference used by [_get_biome_at] so full-map tile passes do
+## not re-resolve `/root/Main/World` per tile. Revalidated lazily; biomes are read
+## live from `data`, so runtime `set_biome` calls (e.g. CataclysmSystem) stay visible.
+var _cached_world_data: Object = null
 
 # ============================================================
 # FIRE TRACKING
@@ -185,6 +197,7 @@ func initialize_for_world(world: Node) -> void:
 	_moisture.resize(tile_count)
 	_vegetation.resize(tile_count)
 	_pollution.resize(tile_count)
+	_pollution_prev.resize(tile_count)
 	_temperature.resize(tile_count)
 	# Initialize from world data
 	for i in range(tile_count):
@@ -258,24 +271,42 @@ func _on_game_tick(tick: int) -> void:
 	# Update seasonal temperature
 	if tick % 60 == 0:
 		_update_seasonal_temperatures(tick)
-	# Full ecology update (soil, moisture, vegetation interactions)
-	if tick % ECOLOGY_UPDATE_INTERVAL == 0:
-		_update_ecology(tick)
-	# Plant growth
-	if tick % PLANT_GROWTH_INTERVAL == 0:
-		_update_plant_growth(tick)
+	# Full ecology update (soil, moisture, vegetation interactions) — sliced
+	var eco_range: Array[int] = _fullmap_slice(tick, ECOLOGY_UPDATE_INTERVAL, _soil_quality.size())
+	if not eco_range.is_empty():
+		_update_ecology_slice(tick, eco_range[0], eco_range[1])
+	# Plant growth — sliced
+	var plant_range: Array[int] = _fullmap_slice(tick, PLANT_GROWTH_INTERVAL, _vegetation.size())
+	if not plant_range.is_empty():
+		_update_plant_growth_slice(tick, plant_range[0], plant_range[1])
 	# Fire spread
 	if tick % FIRE_SPREAD_INTERVAL == 0 and not _active_fires.is_empty():
 		_update_fire_spread(tick)
-	# Erosion
-	if tick % EROSION_INTERVAL == 0:
-		_update_erosion(tick)
-	# Pollution diffusion
-	if tick % POLLUTION_INTERVAL == 0:
-		_update_pollution(tick)
+	# Erosion — sliced
+	var erosion_range: Array[int] = _fullmap_slice(tick, EROSION_INTERVAL, _soil_quality.size())
+	if not erosion_range.is_empty():
+		_update_erosion_slice(tick, erosion_range[0], erosion_range[1])
+	# Pollution diffusion — sliced (swap buffers only at window start)
+	var poll_range: Array[int] = _fullmap_slice(tick, POLLUTION_INTERVAL, _pollution.size())
+	if not poll_range.is_empty():
+		_update_pollution_slice(tick, poll_range[0], poll_range[1], tick % POLLUTION_INTERVAL == 0)
 	# Animal migration
 	if tick % MIGRATION_INTERVAL == 0:
 		_update_migration(tick)
+
+
+## Deterministic slice of tile indices `[start, end)` to process this tick for a
+## full-map pass. Within each interval window the pass is spread across the first
+## `FULLMAP_BATCHES` ticks; returns an empty array on no-op ticks.
+func _fullmap_slice(tick: int, interval: int, tile_count: int) -> Array[int]:
+	var t_in: int = tick % interval
+	if tile_count <= 0 or t_in >= FULLMAP_BATCHES:
+		return []
+	var start_i: int = tile_count * t_in / FULLMAP_BATCHES
+	var end_i: int = tile_count * (t_in + 1) / FULLMAP_BATCHES
+	if end_i <= start_i:
+		return []
+	return [start_i, end_i]
 
 
 # ============================================================
@@ -360,11 +391,10 @@ func get_current_season() -> int:
 # ECOLOGY UPDATE (soil, moisture, vegetation interactions)
 # ============================================================
 
-func _update_ecology(tick: int) -> void:
-	var tile_count: int = _soil_quality.size()
+func _update_ecology_slice(tick: int, start_i: int, end_i: int) -> void:
 	var weather_overlay: Node = _get_weather_overlay()
 	var is_raining: bool = weather_overlay != null and weather_overlay.has_method("is_precipitating") and weather_overlay.is_precipitating()
-	for i in range(tile_count):
+	for i in range(start_i, end_i):
 		var x: int = i % WorldData.WIDTH
 		var y: int = i / WorldData.WIDTH
 		var biome: int = _get_biome_at(x, y)
@@ -425,10 +455,9 @@ func get_pollution_at(x: int, y: int) -> float:
 # PLANT GROWTH
 # ============================================================
 
-func _update_plant_growth(tick: int) -> void:
-	var tile_count: int = _vegetation.size()
+func _update_plant_growth_slice(tick: int, start_i: int, end_i: int) -> void:
 	var season: int = get_current_season()
-	for i in range(tile_count):
+	for i in range(start_i, end_i):
 		var x: int = i % WorldData.WIDTH
 		var y: int = i / WorldData.WIDTH
 		var biome: int = _get_biome_at(x, y)
@@ -601,12 +630,11 @@ func _get_wind_factor() -> float:
 # EROSION
 # ============================================================
 
-func _update_erosion(tick: int) -> void:
-	"""Erosion: soil degradation from water flow, deforestation, overuse."""
-	var tile_count: int = _soil_quality.size()
+func _update_erosion_slice(tick: int, start_i: int, end_i: int) -> void:
+	"""Erosion: soil degradation from water flow, deforestation, overuse (sliced)."""
 	var weather_overlay: Node = _get_weather_overlay()
 	var is_raining: bool = weather_overlay != null and weather_overlay.has_method("is_precipitating") and weather_overlay.is_precipitating()
-	for i in range(tile_count):
+	for i in range(start_i, end_i):
 		var x: int = i % WorldData.WIDTH
 		var y: int = i / WorldData.WIDTH
 		var biome: int = _get_biome_at(x, y)
@@ -642,18 +670,22 @@ func _spread_erosion_to_neighbors(x: int, y: int, amount: float) -> void:
 # POLLUTION
 # ============================================================
 
-func _update_pollution(tick: int) -> void:
-	"""Pollution diffusion and decay."""
-	var tile_count: int = _pollution.size()
-	# Pollution from fire pits
-	for fire in _active_fires:
-		var pos: Vector2i = fire.get("pos", Vector2i.ZERO)
-		var fidx: int = _tile_index(pos.x, pos.y)
-		if fidx >= 0:
-			_pollution[fidx] = minf(POLLUTION_MAX, _pollution[fidx] + POLLUTION_FIRE_PIT)
-	# Pollution diffusion (spread to neighbors)
-	var old_pollution: PackedFloat32Array = _pollution.duplicate()
-	for i in range(tile_count):
+func _update_pollution_slice(tick: int, start_i: int, end_i: int, swap_buffers: bool = false) -> void:
+	"""Pollution diffusion and decay (sliced). Buffer swap + fire injection run only on
+	the window-start slice; all slices in the window read the same `_pollution_prev`
+	snapshot, so slicing is order-free."""
+	# Pollution from fire pits (only at window start, once per pass)
+	if swap_buffers:
+		for fire in _active_fires:
+			var pos: Vector2i = fire.get("pos", Vector2i.ZERO)
+			var fidx: int = _tile_index(pos.x, pos.y)
+			if fidx >= 0:
+				_pollution[fidx] = minf(POLLUTION_MAX, _pollution[fidx] + POLLUTION_FIRE_PIT)
+		# Swap buffers instead of duplicating
+		var _tmp: PackedFloat32Array = _pollution_prev
+		_pollution_prev = _pollution
+		_pollution = _tmp
+	for i in range(start_i, end_i):
 		var x: int = i % WorldData.WIDTH
 		var y: int = i / WorldData.WIDTH
 		var diffusion: float = 0.0
@@ -668,8 +700,8 @@ func _update_pollution(tick: int) -> void:
 				var nidx: int = _tile_index(nx, ny)
 				if nidx < 0:
 					continue
-				diffusion += (old_pollution[nidx] - _pollution[i]) * POLLUTION_DIFFUSION_RATE * 0.125
-		_pollution[i] = clampf(_pollution[i] + diffusion, POLLUTION_MIN, POLLUTION_MAX)
+				diffusion += (_pollution_prev[nidx] - _pollution_prev[i]) * POLLUTION_DIFFUSION_RATE * 0.125
+		_pollution[i] = clampf(_pollution_prev[i] + diffusion, POLLUTION_MIN, POLLUTION_MAX)
 		# Natural decay
 		_pollution[i] = maxf(POLLUTION_MIN, _pollution[i] - POLLUTION_DECAY_RATE)
 
@@ -795,10 +827,12 @@ func _is_valid_tile(x: int, y: int) -> bool:
 
 
 func _get_biome_at(x: int, y: int) -> int:
-	var world: Node = _get_world()
-	if world == null or world.data == null:
-		return Biome.Type.PLAINS
-	return world.data.get_biome(x, y)
+	if _cached_world_data == null or not is_instance_valid(_cached_world_data):
+		var world: Node = _get_world()
+		if world == null or world.data == null:
+			return Biome.Type.PLAINS
+		_cached_world_data = world.data
+	return _cached_world_data.get_biome(x, y)
 
 
 func _get_world() -> Node:

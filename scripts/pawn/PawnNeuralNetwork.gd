@@ -56,6 +56,20 @@ func _sanitize_float(value: Variant, label: String = "") -> float:
 	return result
 
 
+## Hot-loop lazy-label variant of _sanitize_float.
+## The diagnostic label (fmt % [arg_a, arg_b]) is constructed ONLY when the
+## value is actually NaN/Inf (rare); the finite path does no String/Array
+## allocation. Result and warning text are identical to _sanitize_float.
+func _sanitize_float_fmt(value: Variant, label_fmt: String, arg_a: Variant, arg_b: Variant) -> float:
+	var result: float = float(value)
+	if is_nan(result) or is_inf(result):
+		var label: String = label_fmt % [arg_a, arg_b]
+		if OS.is_debug_build():
+			push_warning("[PawnNeuralNetwork] Invalid float%s sanitized to 0.0" % (" for %s" % label if label != "" else ""))
+		return 0.0
+	return result
+
+
 ## Create neurons for a layer
 func _create_neurons(count: int, layer_name: String) -> Array:
 	var neurons: Array = []
@@ -131,19 +145,24 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 		var curr_layer_name: String = str((layer_neurons[0] as Dictionary).get("id", "")).split("_")[0]
 		var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
 		var layer_connections: Dictionary = connections.get(connection_key, {})
+		var source_ids: Array[String] = []
+		source_ids.resize(prev_neurons.size())
+		var source_conn_prefixes: Array[String] = []
+		source_conn_prefixes.resize(prev_neurons.size())
+		for source_idx in range(prev_neurons.size()):
+			source_ids[source_idx] = str((prev_neurons[source_idx] as Dictionary).get("id", ""))
+			source_conn_prefixes[source_idx] = source_ids[source_idx] + "_"
 		
 		for neuron_idx in range(layer_neurons.size()):
 			var neuron: Dictionary = layer_neurons[neuron_idx]
 			var neuron_value: float = 0.0
+			var target_id: String = str(neuron.get("id", ""))
 			for source_idx in range(prev_neurons.size()):
-				var source_neuron: Dictionary = prev_neurons[source_idx]
-				var source_id: String = str(source_neuron.get("id", ""))
-				var target_id: String = str(neuron.get("id", ""))
-				var conn_id: String = "%s_%s" % [source_id, target_id]
+				var conn_id: String = source_conn_prefixes[source_idx] + target_id
 				var conn_v: Variant = layer_connections.get(conn_id, null)
 				if conn_v is Dictionary:
-					var source_value: float = _sanitize_float(current_values[source_idx], "layer_%d_source_%d" % [layer_idx, source_idx])
-					var weight: float = _sanitize_float((conn_v as Dictionary).get("weight", 0.0), "weight_%s" % conn_id)
+					var source_value: float = current_values[source_idx]
+					var weight: float = _sanitize_float_fmt((conn_v as Dictionary).get("weight", 0.0), "weight_%s", conn_id, "")
 					neuron_value += source_value * weight
 			neuron.activation = _apply_activation(neuron_value, layer_idx)
 			neuron.value = neuron_value

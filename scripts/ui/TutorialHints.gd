@@ -259,13 +259,21 @@ func _check_pawn_hunger_low() -> bool:
 
 func _show_hint(hint_key: String) -> void:
 	_current_hint = hint_key
-	_hint_label.text = HINTS[hint_key].text
+	_hint_label.text = _strip_bbcode(HINTS[hint_key].text)
 	_hint_label.visible = true
 	_hint_display_timer = 0.0
 	
 	if not _shown_hints.has(hint_key):
 		_shown_hints.append(hint_key)
 		_save_shown_hints()
+
+
+## The hint label is a plain Label (no RichTextLabel), so any BBCode markup
+## such as [b]...[/b] would render as literal text. Strip it before display.
+func _strip_bbcode(text: String) -> String:
+	var regex: RegEx = RegEx.new()
+	regex.compile("\\[[^\\]]*\\]")
+	return regex.sub(text, "", true)
 
 
 func _hide_hint() -> void:

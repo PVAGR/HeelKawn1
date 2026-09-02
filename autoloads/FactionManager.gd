@@ -32,6 +32,14 @@ enum AuthorityContext {
 func _ready() -> void:
 	if GameManager != null and not GameManager.game_tick.is_connected(_on_game_tick_diplomacy):
 		GameManager.game_tick.connect(_on_game_tick_diplomacy)
+	if GameManager != null and GameManager.has_signal("game_tick"):
+		GameManager.game_tick.connect(_forward_tick_to_children)
+
+
+func _forward_tick_to_children(tick: int) -> void:
+	for child in get_children():
+		if child.has_method("_on_game_tick"):
+			child._on_game_tick(tick)
 
 
 func _load_sub(name: String, path: String) -> Node:

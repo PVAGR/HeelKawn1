@@ -501,7 +501,8 @@ func _describe_event(ev_type: String, ev: Dictionary) -> String:
 
 
 func _echo_exists_for_source(ev: Dictionary) -> bool:
-	var ev_eid: int = int(ev.get("eid", int(ev.get("event_id", -1))))
+	var ev_eid_raw = ev.get("eid", ev.get("event_id", -1))
+	var ev_eid: int = int(ev_eid_raw) if ev_eid_raw is int or ev_eid_raw is float else -1
 	if ev_eid >= 0:
 		for e in _echoes:
 			if e.source_event_id == ev_eid:

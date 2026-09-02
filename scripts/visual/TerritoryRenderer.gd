@@ -34,6 +34,8 @@ func sync_from_world() -> void:
 
 
 func _process(_delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
 	if tick_now - _last_sync_tick >= 120:
 		_sync_from_world()

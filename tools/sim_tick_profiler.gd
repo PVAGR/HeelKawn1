@@ -197,12 +197,13 @@ func _final_report(tick: int) -> void:
 	var gm_tick: int = gm.get("tick_count") if gm != null else -1
 	var tm_tick: int = tm.get("current_tick") if tm != null else -1
 	var gm_paused: bool = bool(gm.get("is_paused")) if gm != null else true
-	var tm_paused: bool = bool(tm.get("_is_paused")) if tm != null else true
-	var consistency: String = "ok" if gm_tick == tm_tick and not gm_paused and not tm_paused else "DESYNC"
+	## Pause has a SINGLE authority (GameManager.is_paused). TickManager holds no
+	## pause state, so there is nothing separate to compare for desync here.
+	var consistency: String = "ok" if gm_tick == tm_tick and not gm_paused else "DESYNC"
 	if gm_tick != tm_tick:
 		consistency = "tick_desync gm=%d tm=%d" % [gm_tick, tm_tick]
-	elif gm_paused or tm_paused:
-		consistency = "paused gm=%s tm=%s" % [str(gm_paused), str(tm_paused)]
+	elif gm_paused:
+		consistency = "paused"
 
 	var avg_usec_per_tick: float = float(_total_profiled_usec) / max(_total_profiled_ticks, 1)
 

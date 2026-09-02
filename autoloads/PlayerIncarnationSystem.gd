@@ -140,7 +140,7 @@ func _on_game_tick(tick: int) -> void:
 		_ticks_since_validity_check = 0
 		_validate_incarnation_integrity(tick)
 
-	var pawn := _find_pawn(current_pawn_id)
+	var pawn: Node = _find_pawn(current_pawn_id)
 	if pawn == null:
 		_handle_incarnation_error(current_pawn_id, 1, "Pawn node vanished")
 		return
@@ -216,7 +216,7 @@ func get_buff_scaling_progress() -> float:
 func _validate_incarnation_integrity(tick: int) -> void:
 	if current_pawn_id < 0:
 		return
-	var pawn := _find_pawn(current_pawn_id)
+	var pawn: Node = _find_pawn(current_pawn_id)
 	if pawn == null:
 		push_warning("[PlayerIncarnationSystem] Integrity check: incarnated pawn %d no longer exists, releasing" % current_pawn_id)
 		_release_internal(ReleaseReason.ERROR)
@@ -247,7 +247,7 @@ func incarnate(pawn_id: int) -> bool:
 	if _cooldown_until_tick > tick_now:
 		return false
 
-	var pawn := _find_pawn(pawn_id)
+	var pawn: Node = _find_pawn(pawn_id)
 	if pawn == null or pawn.data == null:
 		return false
 	if not _can_incarnate_pawn(pawn.data):
@@ -304,7 +304,7 @@ func force_incarnate(pawn_id: int) -> bool:
 		return false
 	if _incarnation_reentry_guard:
 		return false
-	var pawn := _find_pawn(pawn_id)
+	var pawn: Node = _find_pawn(pawn_id)
 	if pawn == null or pawn.data == null:
 		return false
 	_cooldown_until_tick = -1
@@ -476,7 +476,7 @@ func _release_internal(reason: int) -> void:
 	var duration: int = maxi(0, tick_now - tick_started)
 
 	var name_str: String = ""
-	var pawn := _find_pawn(old_id)
+	var pawn: Node = _find_pawn(old_id)
 	if pawn != null and pawn.data != null:
 		name_str = pawn.data.display_name if "display_name" in pawn.data else str(old_id)
 
@@ -604,7 +604,9 @@ func _on_pawn_died_event(payload: Dictionary) -> void:
 		return
 	if current_pawn_id < 0 or _pending_death_release:
 		return
-	var pawn := _find_pawn(died_pawn_id)
+	var pawn: Node = _find_pawn(died_pawn_id)
+	if pawn == null:
+		return
 	if pawn != null and pawn.data != null:
 		_handle_pawn_death(pawn, pawn.data)
 
@@ -618,8 +620,10 @@ func _on_pawn_born_event(payload: Dictionary) -> void:
 	var new_pawn_id: int = int(payload.get("pawn_id", -1))
 	if new_pawn_id < 0:
 		return
-	var pawn := _find_pawn(new_pawn_id)
-	if pawn == null or pawn.data == null:
+	var pawn: Node = _find_pawn(new_pawn_id)
+	if pawn == null:
+		return
+	if pawn.data == null:
 		return
 	if _can_incarnate_pawn(pawn.data):
 		pawn_status_changed.emit(new_pawn_id, "born_available", 1.0)
@@ -891,7 +895,7 @@ func get_previous_pawn_ids() -> Array[int]:
 ## ─── Status / Debug ─────────────────────────────────────────────────────────
 
 func get_incarnation_status() -> Dictionary:
-	var pawn := get_incarnated_pawn()
+	var pawn: Node = get_incarnated_pawn()
 	var name_str: String = "None"
 	var health_val: float = 0.0
 	var max_hp: float = 100.0

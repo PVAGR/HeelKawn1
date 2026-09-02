@@ -19,6 +19,8 @@ const STAMINA_DECAY_RATE: float = 0.004  # ~25,000 ticks to deplete from full (~
 const EARLY_SURVIVAL_PROTECTION_DAYS: int = 35
 const FIRST_YEAR_HARMFUL_SLOWDOWN: float = 300.0
 const SURVIVAL_PAWN_BATCH_COUNT: int = 4
+const DEATH_CHECK_INTERVAL: int = 5
+const FULL_SURVIVAL_INTERVAL: int = 3
 
 # Work multipliers (faster decay when working)
 const WORK_HUNGER_MULT: float = 1.5    # Working pawns get hungry 1.5x faster
@@ -86,12 +88,16 @@ func _ready() -> void:
 
 
 func _on_game_tick(tick: int) -> void:
+	# Throttle: only process survival every FULL_SURVIVAL_INTERVAL ticks
+	if tick % FULL_SURVIVAL_INTERVAL != 0:
+		return
 	# Process survival for all pawns.
 	var pawns: Array = PawnAccess.find_alive_pawns()
 	if pawns.is_empty():
 		return
 
 	var alive_ids: Dictionary = {}
+	var check_death: bool = (tick % DEATH_CHECK_INTERVAL == 0)
 	for pawn in pawns:
 		if pawn == null or not is_instance_valid(pawn) or pawn.data == null:
 			continue
@@ -101,7 +107,8 @@ func _on_game_tick(tick: int) -> void:
 
 		# Keep fatal-state and duplicate-death protection frequent; batch the
 		# expensive body/mood/injury upkeep below.
-		_check_death_conditions(pawn, tick)
+		if check_death:
+			_check_death_conditions(pawn, tick)
 		if "is_dead" in data and bool(data.is_dead):
 			continue
 		if not _pawn_in_batch(pawn, tick, SURVIVAL_PAWN_BATCH_COUNT):

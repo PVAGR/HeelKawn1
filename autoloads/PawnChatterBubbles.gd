@@ -24,6 +24,7 @@ var _active: Dictionary = {}
 # Per-pawn cooldown: pawn_id -> msec timestamp of last bubble
 var _cooldowns: Dictionary = {}
 var _cleanup_timer: Timer
+var _ui_update_accumulator: float = 0.0
 
 
 func _ready() -> void:
@@ -127,7 +128,13 @@ func show_bubble(pawn_id: int, pawn_node: Node2D, text: String, _bubble_type: St
 	add_child(fade_timer)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if GameManager != null and GameManager.is_paused:
+		return
+	_ui_update_accumulator += delta
+	if _ui_update_accumulator < 0.25:
+		return
+	_ui_update_accumulator = 0.0
 	# Reposition all bubbles above their pawns in screen space
 	var camera: Camera2D = _get_camera()
 	if camera == null:

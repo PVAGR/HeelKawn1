@@ -187,6 +187,19 @@ func use() -> bool:
 	return durability > 0
 
 
+## Use the item by an aggregated amount in ONE call (no loop over each unit of
+## wear). Returns true if still usable afterward, false if it broke during the
+## window. The caller is responsible for emitting at most one break event.
+func use_amount(amount: int) -> bool:
+	if amount <= 0:
+		return durability > 0
+	if durability <= 0:
+		return false
+	var used: int = mini(amount, durability)
+	durability -= used
+	return durability > 0
+
+
 ## Is this item broken?
 func is_broken() -> bool:
 	return durability <= 0

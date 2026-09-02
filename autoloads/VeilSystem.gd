@@ -323,7 +323,10 @@ func _update_thin_spots(tick: int) -> void:
 		spot.thinness = maxf(0.0, spot.thinness - decay)
 		if spot.thinness <= 0.0:
 			to_remove.append(i)
-	for idx in to_remove:
+	for i in range(to_remove.size() - 1, -1, -1):
+		var idx: int = to_remove[i]
+		if idx < 0 or idx >= _thin_spots.size():
+			continue
 		if _thin_spots[idx].persistent:
 			continue
 		_thin_spots.remove_at(idx)
@@ -354,8 +357,11 @@ func _update_rends(tick: int) -> void:
 				"cause": rend.cause,
 			})
 			_append_recent_event("rend_healed", tick, {"x": loc.x, "y": loc.y})
-	for idx in to_remove:
-		var rend: Rend = _rends[idx]
+	for i in range(to_remove.size() - 1, -1, -1):
+		var rend_idx: int = to_remove[i]
+		if rend_idx < 0 or rend_idx >= _rends.size():
+			continue
+		var rend: Rend = _rends[rend_idx]
 		var final_sev: float = rend.current_severity(tick)
 		if not EventBus == null and EventBus.has_method("emit"):
 			EventBus.emit("veil_restored", {
@@ -364,7 +370,7 @@ func _update_rends(tick: int) -> void:
 				"location_y": rend.location.y,
 				"restored_severity": final_sev,
 			})
-		_rends.remove_at(idx)
+		_rends.remove_at(rend_idx)
 	for rend in _rends:
 		if not rend.active:
 			continue

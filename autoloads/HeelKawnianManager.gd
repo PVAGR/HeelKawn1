@@ -55,6 +55,12 @@ static var _active_ambition_chains: Dictionary = {}
 static var _recovery_feature_cache: Dictionary = {} # settlement_id -> {"tick": int, "features": Dictionary}
 static var _recovery_population_cache: Dictionary = {} # settlement_id -> {"tick": int, "population": int}
 
+## Matrix decision cache: pawn_id -> { "tick": int, "hunger": float, "rest": float, "health": float, "decision": Dictionary }
+## Keyed by pawn_id so each pawn gets one cached entry per tick. The cached entry
+## is only valid if the tick matches and urgent needs (hunger, rest, health) haven't
+## changed by more than 5 points since the cached tick.
+static var _matrix_decision_cache: Dictionary = {}
+
 
 func _ready() -> void:
 	if GameManager != null and not GameManager.game_tick.is_connected(_on_need_satisfaction_tick):
@@ -62,6 +68,10 @@ func _ready() -> void:
 	# Subscribe to pressure_event from EventBus
 	if EventBus != null:
 		EventBus.subscribe(EventBus.EVENT_PRESSURE_EVENT, self, "_on_pressure_event")
+
+
+static func clear_matrix_decision_cache() -> void:
+	_matrix_decision_cache.clear()
 
 
 func _exit_tree() -> void:
@@ -86,10 +96,13 @@ func _on_need_satisfaction_tick(tick: int) -> void:
 
 ## EventBus handler: apply personality-based biases when pressure fires
 func _on_pressure_event(payload: Dictionary) -> void:
+	var event_tick: int = int(payload.get("tick", 0))
+	# Tick gate: only process pressure events every 8 ticks to reduce scan cost.
+	if posmod(event_tick, 8) != posmod(int(payload.get("region_id", -1)), 8):
+		return
 	var region_id: int = int(payload.get("region_id", -1))
 	var pressure_type: String = str(payload.get("pressure_type", ""))
 	var intensity: float = float(payload.get("intensity", 0.0))
-	var tick: int = int(payload.get("tick", 0))
 
 	if region_id < 0 or intensity <= 0.0:
 		return
@@ -128,7 +141,7 @@ func _on_pressure_event(payload: Dictionary) -> void:
 		_pressure_bias_by_pawn[pawn_id] = {
 			"bias_type": bias_type,
 			"intensity": amplified_intensity,
-			"tick": tick,
+			"tick": event_tick,
 			"pressure_type": pressure_type,
 			"region_id": region_id,
 		}
@@ -382,6 +395,32 @@ static func get_matrix_decision_for_pawn(pawn: Variant) -> Dictionary:
 	var data: HeelKawnianData = _pawn_data(pawn)
 	if data == null:
 		return {}
+	var current_tick: int = _tick()
+	var pawn_id: int = int(data.id)
+	# CACHE: check per-pawn, per-tick cache first
+	var cache_key: int = pawn_id
+	var cached: Dictionary = _matrix_decision_cache.get(cache_key, {})
+	if cached.has("tick") and int(cached["tick"]) == current_tick:
+		# Exception: if hunger, rest, or health changed by more than 5 since cached,
+		# skip cache and recompute (urgent needs must be fresh)
+		if abs(float(cached.get("hunger", 0.0)) - data.hunger) <= 5.0 \
+			and abs(float(cached.get("rest", 0.0)) - data.rest) <= 5.0 \
+			and abs(float(cached.get("health", 0.0)) - data.health) <= 5.0:
+			return cached.get("decision", {})
+	# Not cached or stale — compute fresh
+	var result: Dictionary = _compute_matrix_decision(pawn, data, current_tick)
+	_matrix_decision_cache[cache_key] = {
+		"tick": current_tick,
+		"hunger": data.hunger,
+		"rest": data.rest,
+		"health": data.health,
+		"decision": result,
+	}
+	return result
+
+
+## Internal: the actual matrix decision computation (extracted from get_matrix_decision_for_pawn).
+static func _compute_matrix_decision(pawn: Variant, data: HeelKawnianData, current_tick: int) -> Dictionary:
 	data.update_need_satisfaction()
 	var profile: Dictionary = get_development_profile_for_pawn(pawn)
 	if profile.is_empty():
@@ -1837,14 +1876,25 @@ static func get_preservation_choice_for_pawn(pawn: Variant) -> Dictionary:
 	if my_knowledge.has(KnowledgeSystem.KnowledgeType.WRITING):
 		# Check LibrarySystem for organized library zone (higher preservation factor)
 		var LibrarySystem: Node = Engine.get_main_loop().root.get_node_or_null("LibrarySystem") if Engine.get_main_loop() != null else null
-		if LibrarySystem != null and LibrarySystem.has_method("has_library") and LibrarySystem.has_library(settlement_id) and LibrarySystem.has_method("add_book"):
-			var pres_factor: float = LibrarySystem.get_preservation_factor(settlement_id) if LibrarySystem.has_method("get_preservation_factor") else 0.5
-			LibrarySystem.add_book(settlement_id, {
-				"knowledge_type": best_kt,
-				"carrier": pawn_id,
-				"tick": _tick(),
-				"preservation_factor": pres_factor,
-			})
+		if LibrarySystem != null and LibrarySystem.has_method("has_any_library_at") and LibrarySystem.has_any_library_at(settlement_id) and LibrarySystem.has_method("add_book"):
+			var stats: Dictionary = LibrarySystem.get_settlement_library_stats(settlement_id) if LibrarySystem.has_method("get_settlement_library_stats") else {}
+			var active_library_id: String = ""
+			var pres_factor: float = 0.5
+			var lib_summaries: Array = stats.get("libraries", [])
+			for ls in lib_summaries:
+				if not ls.get("destroyed", false):
+					active_library_id = str(ls.get("library_id", ""))
+					pres_factor = float(ls.get("preservation", 0.5))
+					break
+			if active_library_id.is_empty():
+				return {
+					"action": "write_book",
+					"knowledge_type": best_kt,
+					"target_tile": data.tile_pos,
+					"target_pawn_id": -1,
+					"reason": "write %s in book (library exists but no active branch, only %d carriers)" % [_knowledge_name(best_kt), best_count],
+				}
+			LibrarySystem.add_book(active_library_id, best_kt, pawn_id, _tick())
 			return {
 				"action": "deposit_library",
 				"knowledge_type": best_kt,

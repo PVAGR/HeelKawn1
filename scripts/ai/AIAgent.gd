@@ -127,7 +127,15 @@ func _generate_personality() -> void:
 
 func update() -> void:
 	var current_tick: int = GameManager.tick_count
-	
+
+	# PERF: Non-incarnated (spectator) agents are disabled — skip all work.
+	# ObservationAPI.observe_camera_view() calls get_events_for_tile() which
+	# scans the entire event list (O(N) on total events). With events growing
+	# linearly with tick count and 8 agents calling this every 6-12 ticks,
+	# this was the #1 source of linear cost growth in agent_update (18ms→1s).
+	if controlled_pawn_id == -1:
+		return
+
 	# Observation and goal bookkeeping are intentionally throttled.
 	if last_memory_tick < 0 or current_tick - last_memory_tick >= memory_update_frequency:
 		_update_memory()
@@ -135,7 +143,7 @@ func update() -> void:
 	if last_goal_tick < 0 or current_tick - last_goal_tick >= goal_update_frequency:
 		_update_goals()
 		last_goal_tick = current_tick
-	
+
 	# Make decisions at specified frequency
 	if current_tick - last_decision_tick >= decision_frequency:
 		_make_decisions()
@@ -143,13 +151,7 @@ func update() -> void:
 
 func _update_memory() -> void:
 	if controlled_pawn_id == -1:
-		# Spectator mode - observe camera view
-		var obs: Dictionary = {}
-		if ObservationAPI != null:
-			obs = ObservationAPI.observe_camera_view()
-		else:
-			obs = {"error": "ObservationAPI not available"}
-		memory.add_observation(GameManager.tick_count, obs)
+		return  # Handled by early-return in update()
 	else:
 		# Incarnated mode - observe controlled pawn
 		var obs: Dictionary = {}

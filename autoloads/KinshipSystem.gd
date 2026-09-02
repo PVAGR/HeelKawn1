@@ -590,14 +590,6 @@ var _child_to_parents: Dictionary = {}
 var _pending_births: Dictionary = {}
 
 
-func _ready() -> void:
-	# Connect to GameManager tick if available
-	var gm = get_node_or_null("/root/GameManager")
-	if gm != null and gm.has_signal("game_tick"):
-		if not gm.game_tick.is_connected(_on_game_tick):
-			gm.game_tick.connect(_on_game_tick)
-
-
 ## Internal tick handler - flushes pending births
 func _on_game_tick(tick: int) -> void:
 	_flush_pending_births(tick)

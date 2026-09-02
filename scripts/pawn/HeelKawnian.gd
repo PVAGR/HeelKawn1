@@ -641,12 +641,87 @@ var _woke_tick: int = -9999  # tick when pawn last woke; prevents sleep oscillat
 var _consecutive_abandons: int = 0  # claim/abort loop detector
 var _last_abandon_tick: int = -9999
 var _last_job_search_tick: int = -9999
+## HK-TIME-P4 per-pawn DISCRETE decision cadence (authoritative world-time).
+## The NEXT expensive IDLE deliberation (utility context build + best
+## action choice + job-claim scan) fires when this world-time deadline (in
+## canonical SimulationClock seconds) crosses the pawn_discrete frontier F. The
+## fixed canonical interval between decisions = legacy decision interval in compat
+## ticks * LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION (0.05). -1.0 => the first
+## decision is due at the very next frontier (matches the legacy fresh-spawn due).
+## HK-TIME-P4-FIX2: this is the SINGLE scheduled normal deadline (at most one per
+## pawn). It is set to _DISCRETE_DEADLINE_NONE ("no candidate scheduled yet") while a
+## resumable decision pipeline is mid-flight; the pipeline's CHOOSE_ACTION phase owns
+## scheduling the successor. This stops a free-running lattice from exceeding the
+## rate at which the real pipeline can consume decisions.
+var _next_decision_world_time: float = -1.0
+## HK-TIME-P4-FIX2: sentinel meaning "no normal decision candidate scheduled" so that
+## _apply_authoritative_discrete_frontier can never re-queue a value that was already
+## consumed by a real pipeline start. Far larger than any reachable frontier.
+const _DISCRETE_DEADLINE_NONE: float = 1e18
+## HK-TIME-P4-FIX: ORDERED queued (discovered but NOT yet applied) due decision
+## deadlines <= the latest frontier, ascending. A queued deadline is NOT an applied
+## decision — _tick_idle may consume the OLDEST entry ONLY when it actually starts a
+## real idle decision pipeline. While any entry is unconsumed, _discrete_applied_through
+## stays before the oldest unconsumed deadline, so the pawn_discrete lane cannot
+## falsely commit through it.
+var _discrete_due_deadlines: Array[float] = []
+## Authoritative applied-through cursor (canonical world-seconds) beyond which this
+## pawn's idle decision opportunities are all truly consumed. Advanced ONLY when a
+## real decision pipeline starts (consuming a queued deadline) or, when no due
+## deadline remains through F, to F. The TickManager coordinator commits pawn_discrete
+## to the MINIMUM per-pawn applied-through, never blindly to F.
+var _discrete_applied_through: float = -1.0
+## Diagnostics: decisions queued, decisions actually consumed (real pipeline starts).
+var _discrete_decisions_computed: int = 0
+var _discrete_decisions_consumed: int = 0
+## Diagnostics: last frontier this pawn was driven through.
+var _discrete_decision_last_frontier: float = -1.0
 var _job_claim_cooldowns: Dictionary = {}  # job_id -> tick when cooldown expires (prevents re-claim loops)
 var _direct_forage_target: Vector2i = Vector2i(-1, -1)
 var _next_reproduction_tick: int = 0
 var _active_edict: String = ""
 var _rest_level: int = 0
 var _mood_level: int = 0
+
+## HK-TIME-P3: per-pawn frontier cursor through which this pawn has integrated the
+## pawn_continuous authoritative lane. Continuous survival/aging advances by the
+## frontier DELTA F - _pc_integrated_through on each authoritative_continuous_frontier.
+## Initialized to the current COMMITTED frontier at spawn; NEVER uses target.
+var _pc_integrated_through: float = -1.0
+## Last sim_dt scale factor (sim_dt / BASE_TICK_INTERVAL) for per-tick mechanics.
+var _last_sim_scale: float = 1.0
+## Authoritative simulated elapsed time this pawn consumed last frontier advance
+## (committed canonical seconds). Populated by the pawn_continuous frontier
+## handler. Used by state handlers (WORKING/EATING/CRAFTING) to consume
+## simulated time.
+var _last_sim_dt_seconds: float = 0.0
+## Fractional accumulator for WORK progress that remains after whole progress
+## ticks are applied. Persists only while the same job is held; cleared on
+## job transition so progress cannot leak between jobs.
+var _work_progress_fraction: float = 0.0
+var _work_xp_fraction: float = 0.0
+var _work_wear_fraction: float = 0.0
+var _work_progress_job_id: int = -1
+## Fractional remainder for virtual-tick-equivalent state progress decrements.
+var _compat_frac: float = 0.0
+## Next world-time deadline to recompute life stage (sim-time interval).
+var _next_life_stage_check_wt: float = 0.0
+## Last reported integer age for life-stage transition detection.
+var _last_reported_age: int = 0
+## Per-pawn pawn-time lane diagnostics (aggregate across all pawns via statics).
+static var _pt_pawn_time_lane_calls: int = 0
+static var _pt_sim_seconds_applied_total: float = 0.0
+static var _pt_applied_world_time_min: float = INF
+static var _pt_applied_world_time_max: float = -INF
+static var _pt_lane_lag_max_seconds: float = 0.0
+static var _pt_last_reset_tick: int = -1
+
+## HK-TIME-P3-FIX2: system-level pawn_continuous authoritative lane registration
+## and per-FRONTIER coordinator pass live in TickManager (which owns the lane and
+## drives every live pawn through F synchronously). Each pawn exposes ONLY a pure
+## per-pawn apply (_apply_authoritative_continuous_frontier) that integrates its
+## own cursor delta and NEVER commits any lane. The frontier is SimulationClock
+## COMMITTED canonical time (legacy_core applied) -- NEVER target.
 
 ## Game tick at which we last logged a haul failure for this pawn, so the
 ## retry loop doesn't flood the console.
@@ -695,9 +770,241 @@ static var _cached_enemies_tick: int = -100
 ## per pawn per job tick.
 static var _job_type_name_cache: Dictionary = {}
 static var _job_type_name_cache_built: bool = false
+
+## ── Gated Pawn-Dispatch Profiler (PERF attribution only) ──
+## Active ONLY under the command-line flag --profile-pawn-dispatch.
+## Without it: no per-call timing, no sample arrays, no percentile math,
+## no per-tick counters — virtually zero overhead. Does not change pawn
+## behavior; it only wraps existing calls in elapsed-time measurement.
+static var _pd_flag_scanned: bool = false
+static var _pd_active: bool = false
+static var _pd_agg: Dictionary = {}     # stage -> [total_us, n]
+static var _pd_stage_samples: Dictionary = {}  # stage -> Array[int] bounded samples (per-stage percentiles)
+static var _pd_samples: Array = []      # bounded per-dispatch total-us samples
+static var _pd_last_summary_tick: int = -1
+static var _pd_state_census: Dictionary = {}   # state_name -> count
+static var _pd_unique_pawns: Dictionary = {}   # pawn_id -> true (live pawn count)
+static var _pd_job_counters: Dictionary = {}   # see _pd_init_job_counters
+static var _pd_stage_max_us: Dictionary = {}   # stage -> max observed us (all observations)
+
+# ── MULTI-RATE DECISION CADENCE COUNTERS ─────────────────────────────────────
+# Aggregate across ALL pawns (never per-pawn spam). These quantify the
+# expensive-decision lane so #19's success criteria can be measured directly:
+#   pawn_tick_calls               = total _on_world_tick callbacks processed
+#   pawn_expensive_decisions      = durable decision recomputes (utility + job scan)
+#   pawn_decisions_skipped_not_due= tick where a decision was deferred by cadence
+#   pawn_forced_decisions         = decisions forced by an urgent/edge condition
+#   decision_work_usec            = cpu time spent in expensive decision recomputes
+static var _cad_pawn_tick_calls: int = 0
+static var _cad_expensive_decisions: int = 0
+static var _cad_decisions_skipped_not_due: int = 0
+static var _cad_forced_decisions: int = 0
+static var _cad_decision_work_usec: int = 0
+static var _cad_last_report_tick: int = -1
+const _CAD_REPORT_INTERVAL_TICKS: int = 600
+
+# ── RESUMABLE IDLE DECISION PIPELINE (#22) ──────────────────────────────────────
+# Phases of the expensive IDLE decision, each callable on a separate compat
+# tick to keep individual pawn callbacks under 16.67ms (60 FPS budget).
+enum IdleDecisionPhase {
+	NONE = 0,
+	BUILD_CONTEXT = 1,
+	CHOOSE_ACTION = 2,
+	JOB_SCAN = 3,
+}
+# Aggregate instrumentation (across ALL pawns, no per-pawn spam)
+static var _dp_decisions_started: int = 0
+static var _dp_decisions_completed: int = 0
+static var _dp_decisions_cancelled: int = 0
+static var _dp_phase_max_usec: Dictionary = {}  # phase_name -> max observed usec
+static var _dp_max_total_pawn_callback_usec: int = 0
+static var _dp_max_total_pawn_callback_state: String = ""
+static var _dp_callbacks_over_16667: int = 0
+static var _dp_callbacks_over_8000: int = 0
+
+# Per-pawn: HK-TIME-P4 migrated the expensive-decision cadence from this legacy
+# compat-tick deadline (_next_expensive_decision_tick) to an authoritative
+# canonical world-time deadline (_next_decision_world_time) owned by the
+# pawn_discrete lane. See the discrete fields near _last_job_search_tick.
+# True when the last idle decision was deferred because it wasn't due yet.
+var _last_idle_decision_deferred: bool = false
+# ── Per-pawn resumable decision pipeline state (#22) ──────────────────────────
+var _idle_decision_phase: int = IdleDecisionPhase.NONE  # current phase (NONE = no pending decision)
+var _idle_decision_context: Dictionary = {}  # snapshot captured at decision start
+var _idle_decision_result: String = "work"  # chosen action (applied only after pipeline completes)
+var _idle_decision_food_emergency: bool = false  # food emergency at decision start
+var _idle_decision_started_tick: int = -1  # tick when pipeline started
+var _idle_decision_phase_start_usec: int = 0  # usec when current phase started (for per-phase timing)
+## Simple lazy flag check (cached). Reads both normal and user (post `--`) args.
+static func _pd_on() -> bool:
+	if not _pd_flag_scanned:
+		_pd_flag_scanned = true
+		_pd_active = OS.get_cmdline_args().has("--profile-pawn-dispatch") \
+				or OS.get_cmdline_user_args().has("--profile-pawn-dispatch")
+		if _pd_active:
+			_pd_init_job_counters()
+	return _pd_active
+
+static func _pd_init_job_counters() -> void:
+	_pd_job_counters = {
+		"pawns": 0, "idle": 0, "walking": 0, "fetching": 0, "working": 0,
+		"open_jobs_seen": 0, "open_jobs_last": 0, "claimed_jobs_last": 0,
+		"claim_attempts": 0, "claim_successes": 0, "no_claim_success": 0,
+		"jobs_eligible": "unavailable",  # needs per-open-job base_passes hook (not invented)
+	}
+
+static func _pd_begin() -> int:
+	return Time.get_ticks_usec() if _pd_on() else 0
+
+static func _pd_accum(stage: String, start_us: int) -> void:
+	if start_us <= 0:
+		return
+	var d: int = Time.get_ticks_usec() - start_us
+	var e: Array
+	if _pd_agg.has(stage):
+		e = _pd_agg[stage]
+		e[0] += d
+		e[1] += 1
+	else:
+		e = [d, 1]
+		_pd_agg[stage] = e
+	var st_samples: Array
+	if _pd_stage_samples.has(stage):
+		st_samples = _pd_stage_samples[stage]
+	else:
+		st_samples = []
+		_pd_stage_samples[stage] = st_samples
+	if st_samples.size() < 64:
+		st_samples.append(d)
+	if not _pd_stage_max_us.has(stage) or d > int(_pd_stage_max_us[stage]):
+		_pd_stage_max_us[stage] = d
+
+static func _pd_state_count(state_name: String) -> void:
+	if _pd_on():
+		_pd_state_census[state_name] = int(_pd_state_census.get(state_name, 0)) + 1
+
+## Percentile over THREAD-COPY of a descending-sorted sample slice. Bounded.
+static func _pd_percentile(sorted_desc: Array, p: float) -> int:
+	if sorted_desc.is_empty():
+		return 0
+	var idx: int = clampi(int(floor(float(sorted_desc.size()) * p)), 0, sorted_desc.size() - 1)
+	return int(sorted_desc[idx])
+
+static func _pd_summary(tick: int) -> void:
+	if not _pd_on():
+		return
+	_pd_last_summary_tick = tick
+	if JobManager != null:
+		_pd_job_counters["open_jobs_last"] = int(JobManager.open_count()) if JobManager.has_method("open_count") else -1
+		_pd_job_counters["claimed_jobs_last"] = int(JobManager.claimed_count()) if JobManager.has_method("claimed_count") else -1
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("[PAWN_DISPATCH] SUMMARY tick=%d" % tick)
+	var sort_stages: Array = []
+	for st in _pd_agg:
+		var e: Array = _pd_agg[st]
+		sort_stages.append([int(e[0]), st, int(e[1])])
+	sort_stages.sort_custom(func(a, b): return int(a[0]) > int(b[0]))
+	for item in sort_stages:
+		var total: int = int(item[0])
+		var nm: int = int(item[2])
+		var avg: int = (total / nm) if nm > 0 else 0
+		var st_name: String = str(item[1])
+		var st_sorted: Array = ([] if not _pd_stage_samples.has(st_name) else _pd_stage_samples[st_name]).duplicate()
+		st_sorted.sort()
+		st_sorted.reverse()
+		var mx: int = int(_pd_stage_max_us.get(st_name, 0))
+		lines.append("  %-24s n=%-6d total=%-9d avg=%-6d p50=%-6d p95=%-6d p99=%-6d max=%d" % [
+			st_name, nm, total, avg,
+			_pd_percentile(st_sorted, 0.50),
+			_pd_percentile(st_sorted, 0.95),
+			_pd_percentile(st_sorted, 0.99),
+			mx,
+		])
+	var pc: Dictionary = _pd_job_counters.duplicate()
+	pc["pawns"] = _pd_unique_pawns.size()
+	pc["idle"] = int(_pd_state_census.get("IDLE", 0))
+	pc["walking"] = int(_pd_state_census.get("WALKING_TO_JOB", 0))
+	pc["fetching"] = int(_pd_state_census.get("PASSTHROUGH", 0))
+	pc["working"] = int(_pd_state_census.get("WORKING", 0))
+	pc["claim_attempts"] = int(pc.get("no_claim_success", 0)) + int(pc.get("claim_successes", 0))
+	lines.append("[PAWN_DISPATCH] JOB COUNTERS %s" % str(pc))
+	lines.append("[PAWN_DISPATCH] STATE CENSUS %s" % str(_pd_state_census))
+	for l in lines:
+		print(l)
+
+static func get_pd_snapshot_for_diagnostics() -> Dictionary:
+	return {
+		"agg": _pd_agg.duplicate(true),
+		"stage_samples": _pd_stage_samples.duplicate(true),
+		"stage_max_us": _pd_stage_max_us.duplicate(true),
+		"job_counters": _pd_job_counters.duplicate(true),
+		"state_census": _pd_state_census.duplicate(true),
+		"unique_pawns": _pd_unique_pawns.duplicate(true),
+	}
+
+
+## Multi-rate cadence aggregate report. Mirrors the _pd_* pattern but is ALWAYS
+## available (no PAWN_DISPATCH_PROFILE flag required) so the #19 smoke can read
+## the expensive-decision reduction from the log without extra instrumentation.
+static func _cad_report_if_due(tick: int) -> void:
+	if _cad_last_report_tick >= 0 and tick - _cad_last_report_tick < _CAD_REPORT_INTERVAL_TICKS:
+		return
+	_cad_last_report_tick = tick
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("[CADENCE] tick=%d calls=%d expensive=%d skipped_not_due=%d forced=%d work_us=%d" % [
+		tick,
+		_cad_pawn_tick_calls,
+		_cad_expensive_decisions,
+		_cad_decisions_skipped_not_due,
+		_cad_forced_decisions,
+		_cad_decision_work_usec,
+	])
+	for l in lines:
+		print(l)
+
+
+static func get_cadence_snapshot_for_diagnostics() -> Dictionary:
+	return {
+		"pawn_tick_calls": _cad_pawn_tick_calls,
+		"expensive_decisions": _cad_expensive_decisions,
+		"decisions_skipped_not_due": _cad_decisions_skipped_not_due,
+		"forced_decisions": _cad_forced_decisions,
+		"decision_work_usec": _cad_decision_work_usec,
+		"last_report_tick": _cad_last_report_tick,
+		"decisions_started": _dp_decisions_started,
+		"decisions_completed": _dp_decisions_completed,
+		"decisions_cancelled": _dp_decisions_cancelled,
+		"phase_max_usec": _dp_phase_max_usec.duplicate(),
+		"max_total_pawn_callback_usec": _dp_max_total_pawn_callback_usec,
+		"max_total_pawn_callback_state": _dp_max_total_pawn_callback_state,
+		"callbacks_over_16667": _dp_callbacks_over_16667,
+		"callbacks_over_8000": _dp_callbacks_over_8000,
+	}
+
+## Per-pawn time lane aggregate diagnostics (bounded, no per-pawn spam).
+static func _pt_reset_aggregate() -> void:
+	_pt_pawn_time_lane_calls = 0
+	_pt_sim_seconds_applied_total = 0.0
+	_pt_applied_world_time_min = INF
+	_pt_applied_world_time_max = -INF
+	_pt_lane_lag_max_seconds = 0.0
+	_pt_last_reset_tick = GameManager.tick_count if GameManager != null else 0
+
+static func get_pawn_time_lane_snapshot_for_diagnostics() -> Dictionary:
+	return {
+		"pawn_time_lane_calls": _pt_pawn_time_lane_calls,
+		"sim_seconds_applied_total": _pt_sim_seconds_applied_total,
+		"applied_world_time_min": _pt_applied_world_time_min if _pt_applied_world_time_min != INF else 0.0,
+		"applied_world_time_max": _pt_applied_world_time_max if _pt_applied_world_time_max != -INF else 0.0,
+		"applied_world_time_avg": (_pt_sim_seconds_applied_total / _pt_pawn_time_lane_calls) if _pt_pawn_time_lane_calls > 0 else 0.0,
+		"lane_lag_max_seconds": _pt_lane_lag_max_seconds,
+		"last_reset_tick": _pt_last_reset_tick,
+	}
+
 var _sfx: AudioStreamPlayer2D = null
 var _action_popup: ActionPopupLabel = null
 var _footstep_particles: GPUParticles2D = null
+var _last_footstep_dust_real_msec: int = -1000000
 var _hit_flash_ticks: int = 0
 ## `JobManager.claim_next_for` invokes priority_cb once per open job; neural forward
 ## propagation must not run hundreds of times in one claim scan (was freezing / hard-stopping).
@@ -762,6 +1069,177 @@ func get_pawn_data() -> HeelKawnianData:
 	return data
 
 
+## Pawn time lane: apply continuous rate-based survival mechanics scaled by sim_dt.
+## This is the SINGLE authoritative path for hunger/rest/health/aging/stamina.
+## HK-TIME-P3: called once per authoritative_continuous_frontier advance with
+## sim_dt = COMMITTED frontier delta (never target), from the system
+## pawn_continuous lane handler.
+## Does NOT loop over 0.05s microticks; applies elapsed time in one step.
+## The per-tick constants (HUNGER_DECAY_PER_TICK etc.) were calibrated for the
+## old _decay_needs() cadence of once per 5 compat ticks (0.25 sim-seconds).
+## `scale` converts sim_dt into multiples of that old cadence so 1x rates match
+## the historical behavior exactly and the frontier advances needs ~200x faster
+## in world time.
+func _apply_pawn_time_lane(sim_dt: float) -> void:
+	if data == null:
+		return
+	var scale: float = sim_dt / 0.25  # Old stagger: 5 compat ticks × 0.05s = 0.25s
+
+	# Get trait multipliers (same as _decay_needs)
+	var hunger_mult: float = data.get_trait_mult("hunger_decay_mult")
+	var rest_mult: float = data.get_trait_mult("rest_decay_mult")
+	var mood_mult: float = data.get_trait_mult("mood_decay_mult")
+
+	var pace_h: float = lerpf(0.86, 1.15, _bp(0))
+	var pace_r: float = lerpf(0.86, 1.15, _bp(1))
+	var harmful_scale: float = _harmful_pressure_scale()
+
+	if _state == State.SLEEPING:
+		# Sleeping: slower hunger decay, rest recovery, health recovery
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h * harmful_scale * scale
+		var rate: float = REST_RECOVER_PER_TICK_SLEEP
+		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
+			rate *= REST_RECOVER_BED_MULTIPLIER
+		data.rest = min(100.0, data.rest + rate * scale)
+		# Health recovery while sleeping
+		var heal_rate: float = HEALTH_RECOVER_PER_TICK_SLEEP
+		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
+			heal_rate *= HEALTH_RECOVER_BED_MULTIPLIER
+		if data.health < data.max_health:
+			data.health = min(data.max_health, data.health + heal_rate * scale)
+	else:
+		# Awake: activity-based decay
+		var hunger_act: float = 1.0
+		var rest_act: float = 1.0
+		match _state:
+			State.WALKING_TO_JOB, State.GOING_TO_EAT, State.GOING_TO_BED, State.FETCHING_MATERIAL, State.DRAFT_WALK, State.PILGRIMAGE, State.FLEEING, State.DIRECT_FORAGING, State.GOING_TO_DRINK, State.MOUNTING, State.RIDING, State.DISEMBARKING, State.GOING_TO_BOAT, State.SAILING, State.DISEMBARKING_BOAT:
+				hunger_act = HUNGER_ACTIVITY_WALK
+				rest_act = REST_ACTIVITY_WALK
+			State.WORKING, State.TEACHING, State.CHALLENGE, State.CRAFTING, State.GATHERING:
+				hunger_act = HUNGER_ACTIVITY_WORK
+				rest_act = REST_ACTIVITY_WORK
+			State.HAULING:
+				hunger_act = HUNGER_ACTIVITY_HAUL
+				rest_act = REST_ACTIVITY_HAUL
+		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_act * hunger_mult * pace_h * harmful_scale * scale
+		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_act * rest_mult * pace_r * harmful_scale * scale
+
+	# Mood: continuous linear drift scaled by sim_dt (mood events handled in discrete path)
+	# Contentment gain when needs met, decay when not
+	var mood_drift: float = -MOOD_DECAY_PER_TICK * mood_mult * scale
+	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
+		mood_drift = (MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult) * scale
+	# Add kinship mood bonus (small continuous effect)
+	mood_drift += data.kinship_mood_bonus() * scale
+	data.mood = clampf(data.mood + mood_drift, 0.0, 100.0)
+
+	# Intoxication decay (linear)
+	if data.intoxication > 0.0:
+		data.intoxication = maxf(0.0, data.intoxication - 0.05 * scale)
+
+	# Stamina: continuous linear rate (was throttled to every 5 compat ticks)
+	# At 1x: scale=1 per compat tick, 5 ticks = 5x = same as old per-5-tick call
+	var stamina_decay: float = 0.0
+	var stamina_recover: float = 0.0
+	if _state == State.SLEEPING:
+		stamina_recover = 2.0
+	elif _state == State.WORKING:
+		stamina_decay = 1.5
+	elif _state == State.WALKING_TO_JOB or _state == State.HAULING:
+		stamina_decay = 0.8
+	elif _state == State.IDLE:
+		stamina_recover = 0.5
+	var stamina_mult: float = data.get_trait_mult("stamina_decay_mult")
+	stamina_decay *= stamina_mult
+	stamina_recover *= stamina_mult
+	if data.pain > 50.0:
+		stamina_recover *= 0.5
+	data.stamina = clamp(data.stamina - stamina_decay * scale + stamina_recover * scale, 0.0, 100.0)
+
+	# AGING: SINGLE authoritative path (consolidates the two old paths)
+	# Old path 1 (HeelKawnianData.TICKS_PER_YEAR=5000): 1/5000 per compat tick
+	# Old path 2 (SimTime.TICKS_PER_SIM_YEAR=30000): 1/30000 per _decay_needs call (every 5 compat ticks)
+	# Combined old rate at 1x: (1/5000)*20 + (1/30000)*4 = 0.004 + 0.000133 = 0.004133 yr/s
+	# New single path: use the canonical SimTime.TICKS_PER_SIM_YEAR for in-world years
+	# Apply as: sim_dt / TICKS_PER_SIM_YEAR * (20 ticks/sec) ... wait, sim_dt IS world seconds
+	# So: age_years += sim_dt / (TICKS_PER_SIM_YEAR * BASE_TICK_INTERVAL)
+	# TICKS_PER_SIM_YEAR=30000, BASE_TICK_INTERVAL=0.05 -> 1500 world-seconds per sim year
+	# This matches: 30000 ticks * 0.05s = 1500s = 25 min per in-world year
+	# At 1x: sim_dt per compat tick ≈ 0.05 -> age_years += 0.05/1500 = 1/30000 per tick = matches old path 2 rate
+	# Old path 1 was 5x faster but ran every tick; old path 2 was 5x slower but ran every 5 ticks
+	# The canonical world-time rate is 1 sim year per 1500 world-seconds.
+	# We use the canonical rate: age_years += sim_dt / 1500.0
+	var seconds_per_sim_year: float = float(SimTime.TICKS_PER_SIM_YEAR) * 0.05  # 1500.0
+	data.age_years += sim_dt / seconds_per_sim_year
+
+	# Life stage transition: recompute when integer age changes (robust at any speed)
+	var current_age_int: int = int(data.age_years)
+	if current_age_int != _last_reported_age:
+		_last_reported_age = current_age_int
+		data.age = current_age_int
+		var old_stage: int = data.life_stage
+		data.life_stage = data.compute_life_stage()
+		if data.life_stage != old_stage:
+			var stage_name: String = data.get_life_stage_name()
+			WorldMemory.record_event({
+				"kind": WorldMemory.Kind.LIFE_EVENT,
+				"tick": GameManager.tick_count if GameManager != null else 0,
+				"pawn_id": int(data.id),
+				"pawn_name": data.display_name,
+				"life_stage": stage_name,
+				"age": current_age_int,
+			})
+			data.add_mood_event(MoodEvent.Type.JOY, 30.0, 500)
+			if data.life_stage == HeelKawnianData.LifeStage.ADULT and data.household_id < 0:
+				_create_household()
+			if data.life_stage == HeelKawnianData.LifeStage.ELDER:
+				data.max_health = maxf(50.0, data.max_health - 10.0)
+			elif data.life_stage == HeelKawnianData.LifeStage.ANCIENT:
+				data.max_health = maxf(30.0, data.max_health - 15.0)
+
+	# HK-TIME-P3-FIX 3: the discrete old-age/random death RNG roll and the death /
+	# emergency-food side effects were REMOVED from this continuous kernel. The P3
+	# continuous lane owns ONLY integrable rate state (hunger/rest/health/mood/
+	# intoxication/stamina + deterministic age progression). Discrete death rolls and
+	# discrete survival actions remain on the legacy/discrete path
+	# (_pc_discrete_survival_checks, called from _on_world_tick).
+
+
+## HK-TIME-P3-FIX 3: discrete survival checks that were originally inside the
+## continuous time-lane. These remain on the legacy/discrete path (called from
+## _on_world_tick) so the P3 continuous lane owns NO discrete RNG death or side
+## effects. Uses the last applied continuous dt for the old-age probability so the
+## 1x death rate is unchanged (per compat tick sim_dt ~= 0.05 -> ~0.00004/sec).
+func _pc_discrete_survival_checks() -> void:
+	if data == null:
+		return
+	# Old age death chance (canonical: once per sim year equivalent)
+	# probability = 0.00001 * (sim_dt / 0.25) = sim_dt * 0.00004
+	if data.age_years > 70.0:
+		var old_age_prob: float = _last_sim_dt_seconds * 0.00004
+		if old_age_prob > 0.0 and WorldRNG.chance_for(_pawn_stream("old_age"), old_age_prob, _pawn_salt(43)):
+			_die("old_age")
+			return
+	# Emergency food-seeking for AI agents
+	if data.hunger < 15.0 and _state != State.GOING_TO_EAT and _state != State.EATING:
+		if data.is_carrying() and Item.is_food(data.carrying) and not _should_defer_raw_eat_for_cook():
+			_eat_from_hand()
+			return
+		_emergency_seek_food()
+		if data.hunger < 10.0:
+			_record_consciousness_event("near_death", "Starving — hunger at %.0f" % data.hunger, -80.0, 9, "survival")
+	# Death conditions (with grace period via _harmful_pressure_scale which is 0 early)
+	if data.hunger <= -5.0:
+		_die("")
+		return
+	if data.rest <= -5.0:
+		_die("")
+		return
+	if data.health <= 0.0:
+		_die("")
+		return
+
+
 func apply_body_needs() -> void:
 	if data == null:
 		return
@@ -770,10 +1248,7 @@ func apply_body_needs() -> void:
 		_publish_player_body_needs_to_hud_if_incarnated()
 		return
 	_last_body_needs_tick_applied = tick_now
-	_decay_needs()
-	# Intoxication decay: alcohol wears off over time
-	if data.intoxication > 0.0:
-		data.intoxication = maxf(0.0, data.intoxication - 0.05)
+	_decay_needs_discrete()
 	# Mount riding: if mounted, move the mount tile with the pawn
 	if MountSystem != null and _state == State.RIDING:
 		var mount: Dictionary = MountSystem.get_mount_for_rider(int(data.id))
@@ -1465,6 +1940,16 @@ func _init_footstep_particles() -> void:
 func _emit_footstep_dust() -> void:
 	if _footstep_particles == null:
 		return
+	# HIGH-SPEED FOOTSTEP THROTTLE: use real wall-time sampling.
+	# At 1x: dust every step. At 50x/100x/200x: rate-limited to ~4 particles/sec real time.
+	# The interval is anchored to wall clock, NOT game speed, so speed-down recovers immediately.
+	var now_msec: int = Time.get_ticks_msec()
+	var last_msec: int = _last_footstep_dust_real_msec
+	var interval_ms: int = 250  # 4 particles per real second max cap
+	if (now_msec - last_msec) < interval_ms:
+		return
+	# Update the real-time stamp BEFORE restarting particles
+	_last_footstep_dust_real_msec = now_msec
 	var _ws_has: bool = WorldEnvironmentManager != null and WorldEnvironmentManager.has_method("get_wind_direction")
 	if _ws_has and _footstep_particles.process_material != null:
 		var wind_dir: Vector2 = WorldEnvironmentManager.get_wind_direction()
@@ -1483,51 +1968,38 @@ func _pawn_connect_sim_tick_deferred() -> void:
 	if not is_instance_valid(self):
 		return
 	if data == null or _world == null:
-		push_warning("HeelKawnian: deferred tick connect skipped â€” not bound")
+		push_warning("HeelKawnian: deferred tick connect skipped — not bound")
 		return
-	
+
 	# CRITICAL: Arm pawn simulation ticks FIRST
 	# This flag gates ALL pawn behavior in _on_world_tick
 	_pawn_sim_tick_armed = true
-	
+
+	## HK-TIME-P3-FIX2: lane registration and frontier coordination are owned by
+	## TickManager (drives this pawn through F via the "pawns" group). This pawn
+	## only seeds its per-pawn cursor at the current COMMITTED frontier so a pawn
+	## spawned at world time T does NOT catch up from 0 or from target.
+	var p_tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if p_tree != null and p_tree.root != null:
+		var p_tm: Node = p_tree.root.get_node_or_null("TickManager")
+		if p_tm != null and SimulationClock != null \
+				and SimulationClock.has_method("get_committed_world_time_seconds"):
+			_pc_integrated_through = float(SimulationClock.get_committed_world_time_seconds())
+			# HK-TIME-P4-FIX: seed the per-pawn discrete applied-through at the current
+			# COMMITTED frontier so a pawn spawned at world time T does not catch up
+			# from 0 (its first idle decision is due fresh at the next frontier, not a
+			# catch-up burst).
+			_discrete_applied_through = float(SimulationClock.get_committed_world_time_seconds())
+	# Initialize last reported age for life-stage transition detection
+	_last_reported_age = int(data.age_years)
+
 	# PERFORMANCE: Register pawn in SpatialGrid for O(1) neighbor queries
 	if _spatial_grid != null and _spatial_grid.has_method("insert"):
 		_spatial_grid.insert(self, data.tile_pos)
 
-
-func _on_global_job_completed(job: Job) -> void:
-	if job == null:
-		return
-	# If this pawn completed the job, record as a success
-	if job.assigned_pawn == self:
-		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
-			_agent_bayes.record_job_outcome(job, true)
-		
-		# Notify household of completion for coordinated goal progression
-		if data != null and int(data.household_id) >= 0:
-			HeelKawnianManager.notify_household_task_complete(int(data.household_id), int(job.type))
-
-
-
-func _on_global_job_cancelled(job: Job) -> void:
-	if job == null:
-		return
-	# If this pawn had the job cancelled, record as a failure
-	if job.assigned_pawn == self:
-		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
-			_agent_bayes.record_job_outcome(job, false)
-
-	# Try to equip starting gear from stockpile (if available)
-	if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
-		CraftingSystem.try_equip_from_stockpile(data)
-
-	# TickManager automatically calls _on_world_tick on all "tickable" group members
-	# We were added to "tickable" in _ready(), so just ensure cache is dirty
-	if TickManager != null:
-		TickManager.mark_tickable_cache_dirty()
-	
-	
-	# Continue with pawn initialization
+	# --- Starter initialization (moved from _on_global_job_cancelled) ---
+	# This was orphaned in the job-cancelled handler where it ran on every
+	# global job cancellation instead of during pawn init.
 	_reserved_bed = Vector2i(-1, -1)
 	_target_zone = null
 	_cohort_id = -1
@@ -1538,7 +2010,7 @@ func _on_global_job_cancelled(job: Job) -> void:
 	_perception_scan_cursor = 0
 	# Load saved age as years for display
 	data.age_years = float(data.age)
-	
+
 	# Teaching cooldown (3 days). bind() runs before add_child; resolve WorldClock from scene root.
 	var tree_bt: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree_bt != null and tree_bt.root != null:
@@ -1560,6 +2032,44 @@ func _on_global_job_cancelled(job: Job) -> void:
 		_decision._parity_context_tick = -1
 		_decision._parity_context.clear()
 	_request_redraw()
+
+
+func _on_global_job_completed(job: Job) -> void:
+	if job == null:
+		return
+	# If this pawn completed the job, record as a success
+	if job.assigned_pawn == self:
+		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
+			_agent_bayes.record_job_outcome(job, true)
+		
+		# Notify household of completion for coordinated goal progression
+		if data != null and int(data.household_id) >= 0:
+			HeelKawnianManager.notify_household_task_complete(int(data.household_id), int(job.type))
+		# Multi-rate: the pawn is about to go idle; recompute its next decision
+		# promptly so it re-engages the job queue without waiting for the cadence.
+		_force_expensive_decision()
+
+
+
+func _on_global_job_cancelled(job: Job) -> void:
+	if job == null:
+		return
+	# If this pawn had the job cancelled, record as a failure
+	if job.assigned_pawn == self:
+		if _agent_bayes != null and _agent_bayes.has_method("record_job_outcome"):
+			_agent_bayes.record_job_outcome(job, false)
+		# Multi-rate: the pawn is becoming idle unexpectedly; force a fresh
+		# expensive decision so it responds immediately instead of on cadence.
+		_force_expensive_decision()
+
+	# Try to equip starting gear from stockpile (if available)
+	if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
+		CraftingSystem.try_equip_from_stockpile(data)
+
+	# TickManager automatically calls _on_world_tick on all "tickable" group members
+	# We were added to "tickable" in _ready(), so just ensure cache is dirty
+	if TickManager != null:
+		TickManager.mark_tickable_cache_dirty()
 
 
 func _reset_neural_priority_cache() -> void:
@@ -3487,7 +3997,7 @@ func _process(delta: float) -> void:
 	# PERFORMANCE: Skip movement interpolation if no path
 	if _path.is_empty():
 		return
-	var _proc_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _proc_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
 	
 	# PERFORMANCE: Adaptive visual update rate based on game speed
 	# At high speeds, players can't perceive smooth movement anyway
@@ -3591,7 +4101,7 @@ func _process(delta: float) -> void:
 	if _draw_frame_counter >= redraw_threshold:
 		_draw_frame_counter = 0
 		queue_redraw()
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_pawn_process(Time.get_ticks_usec() - _proc_start)
 
 
@@ -3711,6 +4221,41 @@ func _on_path_complete() -> void:
 
 # ==================== per-tick simulation ====================
 
+## HK-TIME-P3-FIX2: this pawn's ONLY continuous-time entry point. TickManager owns
+## coordination: before each legacy_core commit it ensures the pawn_continuous lane
+## exists, commits legacy_core, then (via _run_pawn_continuous_frontier) drives every
+## live pawn in the "pawns" group through F = legacy_core applied, committing the
+## lane once after ALL succeeded and BEFORE tick_processed.
+##
+## This per-pawn apply is PURE: it integrates this pawn's own cursor delta and NEVER
+## commits any lane, NEVER reads target.
+func _apply_authoritative_continuous_frontier(frontier_seconds: float) -> bool:
+	if data == null or _world == null:
+		return false
+	if not _pawn_sim_tick_armed:
+		return false
+	if _pc_integrated_through < 0.0:
+		if SimulationClock != null and SimulationClock.has_method("get_committed_world_time_seconds"):
+			_pc_integrated_through = float(SimulationClock.get_committed_world_time_seconds())
+		else:
+			_pc_integrated_through = frontier_seconds
+	var dt: float = frontier_seconds - _pc_integrated_through
+	if dt <= 0.0:
+		_pc_integrated_through = frontier_seconds
+		return true  # nothing owed for this F (already integrated / caught up)
+	_last_sim_dt_seconds = dt
+	_last_sim_scale = dt / 0.05  # BASE_TICK_INTERVAL = 0.05
+	var pid: int = int(data.id)
+	var _pc_trace: bool = CrashTrap.should_trace_game_tick_dispatch(GameManager.tick_count if GameManager != null else 0)
+	if _pc_trace:
+		CrashTrap.enter_system("pawn:%d:pawn_continuous" % pid)
+	_apply_pawn_time_lane(dt)
+	if _pc_trace:
+		CrashTrap.exit_system("pawn:%d:pawn_continuous" % pid)
+	_pc_integrated_through = frontier_seconds
+	return true
+
+
 func _on_world_tick(_tick: int) -> void:
 	# CRITICAL: Hard guard: no sim until bind + _ready + deferred connect completed.
 	if not is_instance_valid(self):
@@ -3724,8 +4269,14 @@ func _on_world_tick(_tick: int) -> void:
 	if data.is_dead:
 		return
 
-	var _profiler_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _profiler_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
 	var _p_cat_start: int = _profiler_start
+
+	# Multi-rate cadence telemetry: count how many ticks actually reach the AI
+	# decision path and how many were deferred by cadence. Aggregate dump every
+	# _CAD_REPORT_INTERVAL_TICKS across ALL pawns (no per-pawn spam).
+	HeelKawnian._cad_pawn_tick_calls += 1
+	HeelKawnian._cad_report_if_due(_tick)
 
 	# FAST PATH: At high speed, skip the expensive IDLE AI (job claiming,
 	# utility scoring, etc.) for pawns that aren't on their AI tick.
@@ -3735,7 +4286,7 @@ func _on_world_tick(_tick: int) -> void:
 		if posmod(_tick + pid, stride) != 0:
 			if _nav_dirty:
 				_process_nav_dirty()
-			if OS.is_debug_build() and TickProfiler != null:
+			if TickProfiler != null and TickProfiler.is_enabled():
 				TickProfiler.record_category("bookkeeping", Time.get_ticks_usec() - _p_cat_start)
 				TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 			return
@@ -3752,50 +4303,39 @@ func _on_world_tick(_tick: int) -> void:
 	if _hit_flash_ticks > 0:
 		_hit_flash_ticks -= 1
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("bookkeeping", Time.get_ticks_usec() - _p_cat_start)
 		_p_cat_start = Time.get_ticks_usec()
 
-	# Stagger needs/threshold upkeep by pawn id
-	if posmod(GameManager.tick_count + pid, 5) == 0:
-		if _trace_ai_slice:
-			CrashTrap.enter_system("pawn_tick:%d:needs" % pid)
-		apply_body_needs()
-		_check_thresholds()
-		if _trace_ai_slice:
-			CrashTrap.exit_system("pawn_tick:%d:needs" % pid)
+	## HK-TIME-P3: the continuous survival/aging kernel (_apply_pawn_time_lane)
+	## NO LONGER runs here. It moved to the system pawn_continuous authoritative
+	## lane coordinator, driven by the COMMITTED frontier (never target). This
+	## avoids double-application of the continuous rates and removes the
+	## target-coupled per-pawn time-lane cursor.
 
-	if OS.is_debug_build() and TickProfiler != null:
-		TickProfiler.record_category("needs", Time.get_ticks_usec() - _p_cat_start)
+	# Discrete needs (mood events, temperature, injuries, perception, social,
+	# skill decay, crisis strikes). Internal throttling handles cadence per
+	# subsystem. Was orphaned in apply_body_needs() which is never called;
+	# wired back into the compat-tick flow.
+	_decay_needs_discrete()
+
+	# HK-TIME-P3-FIX 3: discrete death roll + survival side effects stay here
+	# (legacy discrete path), never in the continuous P3 lane.
+	_pc_discrete_survival_checks()
+
+	if TickProfiler != null and TickProfiler.is_enabled():
+		TickProfiler.record_category("pawn_time_lane", Time.get_ticks_usec() - _p_cat_start)
 		_p_cat_start = Time.get_ticks_usec()
 
-	# Aging: accumulate fractional years. Life stage check every 500 ticks.
-	data.age_years += 1.0 / float(HeelKawnianData.TICKS_PER_YEAR)
-	if posmod(GameManager.tick_count + pid, 500) == 0:
-		var old_stage: int = data.life_stage
-		data.life_stage = data.compute_life_stage()
-		data.age = int(data.age_years)
-		if data.life_stage != old_stage:
-			var stage_name: String = data.get_life_stage_name()
-			WorldMemory.record_event({
-				"kind": WorldMemory.Kind.LIFE_EVENT,
-				"tick": GameManager.tick_count,
-				"pawn_id": int(data.id),
-				"pawn_name": data.display_name,
-				"life_stage": stage_name,
-				"age": int(data.age_years),
-			})
-			data.add_mood_event(MoodEvent.Type.JOY, 30.0, 500)
-			if data.life_stage == HeelKawnianData.LifeStage.ADULT and data.household_id < 0:
-				_create_household()
-			if data.life_stage == HeelKawnianData.LifeStage.ELDER:
-				data.max_health = maxf(50.0, data.max_health - 10.0)
-			elif data.life_stage == HeelKawnianData.LifeStage.ANCIENT:
-				data.max_health = maxf(30.0, data.max_health - 15.0)
+	if TickProfiler != null and TickProfiler.is_enabled():
+		TickProfiler.record_category("discrete_needs", Time.get_ticks_usec() - _p_cat_start)
+		_p_cat_start = Time.get_ticks_usec()
+
+	# Neural autonomy pulse (cognitive, not survival-rate) — keep on compat cadence
 	if _state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0:
 		_pawn_neural_autonomy_pulse()
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("survival_health", Time.get_ticks_usec() - _p_cat_start)
 		TickProfiler.record_counter("neural_evals", 1 if (_state != State.SLEEPING and posmod(GameManager.tick_count + pid * 3, 23) == 0) else 0)
 		_p_cat_start = Time.get_ticks_usec()
@@ -3807,7 +4347,7 @@ func _on_world_tick(_tick: int) -> void:
 		_tick_sleeping()
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:sleep" % pid)
-		if OS.is_debug_build() and TickProfiler != null:
+		if TickProfiler != null and TickProfiler.is_enabled():
 			TickProfiler.record_category("state_dispatch", Time.get_ticks_usec() - _p_cat_start)
 			TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 		return
@@ -3824,7 +4364,7 @@ func _on_world_tick(_tick: int) -> void:
 		if data.household_id < 0 and data.life_stage >= HeelKawnianData.LifeStage.ADULT:
 			_maybe_form_household()
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("social", Time.get_ticks_usec() - _p_cat_start)
 		_p_cat_start = Time.get_ticks_usec()
 
@@ -3832,7 +4372,7 @@ func _on_world_tick(_tick: int) -> void:
 	if posmod(GameManager.tick_count + int(data.id) * 7, SETTLEMENT_CHECK_TICKS) == 0:
 		_maybe_update_settlement_membership()
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("settlement", Time.get_ticks_usec() - _p_cat_start)
 		_p_cat_start = Time.get_ticks_usec()
 
@@ -3841,7 +4381,7 @@ func _on_world_tick(_tick: int) -> void:
 	if draft_mode:
 		_engage_enemies()
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("cognition", Time.get_ticks_usec() - _p_cat_start)
 		_p_cat_start = Time.get_ticks_usec()
 
@@ -3855,48 +4395,69 @@ func _on_world_tick(_tick: int) -> void:
 		if _trace_ai_slice:
 			CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
 			CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
-		if OS.is_debug_build() and TickProfiler != null:
+		if TickProfiler != null and TickProfiler.is_enabled():
 			TickProfiler.record_category("survival_health", Time.get_ticks_usec() - _p_cat_start)
 			TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
 		return
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:panic" % pid)
 
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		_p_cat_start = Time.get_ticks_usec()
 
 	if _trace_ai_slice:
 		CrashTrap.enter_system("pawn_tick:%d:ai:full_state" % pid)
-	var _t_state_handler: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _t_state_handler: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
+	var _pd_state_t0: int = _pd_begin()
+	var _pd_state_label: String = "OTHER"
+	# #22: Cancel any pending idle decision if pawn is no longer IDLE
+	if _state != State.IDLE and _idle_decision_phase != IdleDecisionPhase.NONE:
+		_cancel_pending_idle_decision()
 	match _state:
 		State.IDLE:
+			_pd_state_label = "IDLE"
 			_tick_idle()
 		State.WALKING_TO_JOB:
 			if _trace_ai_slice:
 				CrashTrap.enter_system("pawn_tick:%d:movement" % pid)
+			_pd_state_label = "WALKING_TO_JOB"
 			_tick_walking()
 			if _trace_ai_slice:
 				CrashTrap.exit_system("pawn_tick:%d:movement" % pid)
 		State.WORKING:
+			_pd_state_label = "WORKING"
 			_tick_working()
 		State.HAULING, State.GOING_TO_EAT, State.FETCHING_MATERIAL, State.GOING_TO_BED, State.DRAFT_WALK, State.DIRECT_FORAGING:
+			_pd_state_label = "PASSTHROUGH"
 			pass
 		State.EATING:
+			_pd_state_label = "EATING"
 			_tick_eating()
 		State.SLEEPING:
+			_pd_state_label = "SLEEPING"
 			_tick_sleeping()
 		State.TEACHING:
+			_pd_state_label = "TEACHING"
 			_tick_teaching()
 		State.CHALLENGE:
+			_pd_state_label = "CHALLENGE"
 			_tick_challenge()
 		State.CRAFTING:
+			_pd_state_label = "CRAFTING"
 			_tick_crafting()
 		State.GATHERING:
+			_pd_state_label = "GATHERING"
 			_tick_gathering()
 		State.FLEEING:
+			_pd_state_label = "FLEEING"
 			_tick_fleeing()
 		State.HIDING:
+			_pd_state_label = "HIDING"
 			_tick_hiding()
+	if _pd_state_t0 > 0:
+		_pd_accum("dispatch/%s" % _pd_state_label, _pd_state_t0)
+		_pd_state_count(_pd_state_label)
+		_pd_unique_pawns[int(data.id)] = true
 	if OS.is_debug_build() and TickProfiler != null and _t_state_handler > 0:
 		var _state_us: int = Time.get_ticks_usec() - _t_state_handler
 		match _state:
@@ -3915,9 +4476,20 @@ func _on_world_tick(_tick: int) -> void:
 	if _trace_ai_slice:
 		CrashTrap.exit_system("pawn_tick:%d:ai:full_state" % pid)
 		CrashTrap.exit_system("pawn_tick:%d:ai" % pid)
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_category("state_dispatch", Time.get_ticks_usec() - _p_cat_start)
 		TickProfiler.record_pawn_time(Time.get_ticks_usec() - _profiler_start)
+	# ── #22 callback timing: track total pawn callback duration ──
+	if TickProfiler != null and TickProfiler.is_enabled() and _profiler_start > 0:
+		var _total_cb_us: int = Time.get_ticks_usec() - _profiler_start
+		if _total_cb_us > HeelKawnian._dp_max_total_pawn_callback_usec:
+			HeelKawnian._dp_max_total_pawn_callback_usec = _total_cb_us
+			HeelKawnian._dp_max_total_pawn_callback_state = str(_state)
+		if _total_cb_us > 16667:
+			HeelKawnian._dp_callbacks_over_16667 += 1
+		elif _total_cb_us > 8000:
+			HeelKawnian._dp_callbacks_over_8000 += 1
+	pass
 
 
 ## Speed-aware tick strides (PERF).
@@ -3945,15 +4517,7 @@ func _fast_forward_tick_stride() -> int:
 
 
 func _job_claim_interval_for_speed() -> int:
-	var sb = _speed_bucket()
-	if sb <= 1:
-		return 1
-	elif sb == 2:
-		return 2
-	elif sb == 3:
-		return 4
-	else:
-		return 8
+	return 1
 
 
 func _idle_action_refresh_interval_for_speed() -> int:
@@ -3966,6 +4530,951 @@ func _work_step_interval_for_speed() -> int:
 
 func _lane_interval_for_speed(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: int = -1) -> int:
 	return maxi(1, normal_ticks)
+
+
+## Multi-rate: return interval (in ticks) between EXPENSIVE decision recomputes
+## of the IDLE pawn (utility context build + best-idle-action choice + the
+## job-claim scan). At 200x each compat tick covers ~11 sim-seconds, so pawns
+## must evaluate every tick to keep pace with survival decay and job turnover.
+func _expensive_decision_interval_for_speed() -> int:
+	return 1
+
+
+## True when an urgent survival or edge condition must force the expensive lane
+## to recompute immediately even if no decision deadline is pending (responsiveness
+## guarantee). Migration note (HK-TIME-P4): the old `_next_expensive_decision_tick < 0`
+## cadence signal no longer exists — urgency is now purely a survival condition;
+## the discrete frontier drives the cadence.
+func _expensive_decision_urgent(food_emergency: bool) -> bool:
+	if data == null:
+		return false
+	if data.hunger <= HUNGER_EMERGENCY:
+		return true
+	if data.rest <= REST_PANIC_THRESHOLD:
+		return true
+	if data.hunger <= HUNGER_EAT_THRESHOLD and food_emergency:
+		return true
+	return false
+
+
+## Fixed canonical world-time interval (seconds) between successive IDLE expensive
+## decisions. Legacy cadence was "one decision every _expensive_decision_interval_for_speed()
+## compatibility ticks"; each compat transaction commits exactly
+## LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION (0.05) canonical seconds, so the
+## canonical interval preserves the exact old cadence (currently 1 * 0.05 = 0.05).
+func _discrete_decision_interval_canonical() -> float:
+	return float(_expensive_decision_interval_for_speed()) * TickManager.LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION
+
+
+## Whether the IDLE tick may start/continue an expensive decision RIGHT NOW:
+## true when there is at least one queued DUE decision deadline (oldest unconsumed
+## opportunity) or a real survival emergency must override cadence. Purely world-time
+## driven — NEVER consults the legacy compat-tick scheduler sequence.
+func _discrete_decision_due(food_emergency: bool) -> bool:
+	return not _discrete_due_deadlines.is_empty() or _expensive_decision_urgent(food_emergency)
+
+
+## Ordered ascending insert of a discovered deadline into the per-pawn due queue.
+## The queue is tiny (a pawn consumes ~1/tick) so a linear insert never dominates.
+## Exact duplicate deadlines are NOT queued twice (a single decision opportunity).
+func _queue_decision_deadline(td: float) -> void:
+	for i in range(_discrete_due_deadlines.size()):
+		var existing: float = _discrete_due_deadlines[i]
+		if is_equal_approx(existing, td):
+			return
+		if existing > td:
+			_discrete_due_deadlines.insert(i, td)
+			return
+	_discrete_due_deadlines.append(td)
+
+
+## Read-only applied-through (canonical world-seconds) this pawn's discrete decisions
+## have truly consumed. The TickManager coordinator reads this per pawn to commit
+## pawn_discrete only to the MINIMUM across all live pawns (never blindly to F).
+func get_pawn_discrete_applied_through_world_time() -> float:
+	return _discrete_applied_through
+
+
+## Whether a specific deadline value is already queued (not yet consumed).
+func _is_deadline_queued(td: float) -> bool:
+	return _discrete_due_deadlines.has(td)
+
+
+## HK-TIME-P4-FIX2: encode that NO normal decision candidate is currently scheduled
+## (used while a resumable pipeline is mid-flight and between CHOOSE_ACTION schedules).
+func _clear_scheduled_normal_deadline() -> void:
+	_next_decision_world_time = _DISCRETE_DEADLINE_NONE
+
+
+## HK-TIME-P4-FIX2: the SUCCESSOR scheduling point, owned by the decision pipeline's
+## old CHOOSE_ACTION lifecycle step (the same causal point the legacy tick scheduler
+## scheduled the next decision). The next decision is due one canonical interval after
+## the CURRENT authoritative causal frontier (legacy_core applied). NEVER past
+## applied-through. NO target, NO speed-multiplier gameplay branch.
+func _schedule_next_discrete_deadline() -> void:
+	var frontier: float = 0.0
+	if SimulationClock != null and SimulationClock.has_method("get_lane_applied_world_time_seconds"):
+		frontier = float(SimulationClock.get_lane_applied_world_time_seconds(TickManager.LEGACY_CORE_LANE_ID))
+	var nd: float = frontier + _discrete_decision_interval_canonical()
+	if nd < _discrete_applied_through:
+		nd = _discrete_applied_through
+	_next_decision_world_time = nd
+
+
+## HK-TIME-P4-FIX2: the PURE per-pawn DISCRETE apply, called by the TickManager-owned
+## pawn_discrete coordinator through F. This pawn has at most ONE scheduled normal
+## decision deadline (_next_decision_world_time). When that deadline is DUE (<= F)
+## and is not already queued, it is queued ONCE. There is NO free-running lattice
+## advance here — the app DOES NOT advance through more future deadlines and DOES NOT
+## schedule the next normal deadline (CHOOSE_ACTION owns scheduling the successor).
+## This guarantees the queue cannot outgrow the real resumable pipeline's consumption
+## rate (BUILD_CONTEXT -> CHOOSE_ACTION -> JOB_SCAN spans ticks).
+##
+## Queuing is NOT applying: applied-through advances only when _tick_idle really
+## starts a pipeline for a queued deadline. A non-empty due queue keeps applied-through
+## before the oldest unconsumed deadline, so the lane cannot falsely commit through it.
+## Once no due deadline remains through F, applied-through may advance to F.
+##
+## While the pawn is NOT idle it makes no idle deliberations (legacy: opportunities
+## do not accumulate): any unconsumed queue is cleared, the scheduler and applied-
+## through advance to F, so returning to IDLE yields exactly one fresh decision —
+## never a stale-deadline/two-at-F backlog burst. Returns false (blocking the
+## commit) when the pawn is invalid (null data / world / not armed).
+func _apply_authoritative_discrete_frontier(frontier_seconds: float) -> bool:
+	if data == null or _world == null:
+		return false
+	if not _pawn_sim_tick_armed:
+		return false
+	if _discrete_applied_through < 0.0:
+		var seed: float = frontier_seconds
+		if SimulationClock != null and SimulationClock.has_method("get_committed_world_time_seconds"):
+			seed = minf(seed, float(SimulationClock.get_committed_world_time_seconds()))
+		_discrete_applied_through = seed
+	if _state != State.IDLE:
+		# Non-idle: idle decision opportunities do NOT accumulate (legacy). Clear any
+		# unconsumed queue and advance scheduler + applied-through to F so returning to
+		# IDLE gives one fresh decision (no stale deadline at an old F, no burst).
+		_discrete_due_deadlines.clear()
+		_next_decision_world_time = frontier_seconds
+		_discrete_applied_through = maxf(_discrete_applied_through, frontier_seconds)
+		_discrete_decision_last_frontier = frontier_seconds
+		return true
+	if _next_decision_world_time < 0.0:
+		# Fresh / never-scheduled: first decision due at the very next frontier.
+		_next_decision_world_time = frontier_seconds
+	# Single-slot DUE check (FIX2): queue the ONE scheduled normal deadline if it has
+	# become due and is not already queued. Never advance through more deadlines here.
+	if _next_decision_world_time <= frontier_seconds + 1e-9 and not _is_deadline_queued(_next_decision_world_time):
+		_queue_decision_deadline(_next_decision_world_time)
+		_discrete_decisions_computed += 1
+	# Applied-through advance rule:
+	#   - no due deadline remains through F -> may advance to F (fully applied);
+	#   - a queued due deadline remains     -> stays at/before the oldest unconsumed one.
+	if _discrete_due_deadlines.is_empty():
+		_discrete_applied_through = maxf(_discrete_applied_through, frontier_seconds)
+	_discrete_decision_last_frontier = frontier_seconds
+	return true
+
+
+## Consume the OLDEST queued due deadline as a REAL applied decision. Called ONLY at
+## the moment _tick_idle actually starts a decision pipeline. Marks that opportunity
+## applied (advancing applied-through), and clears the scheduled normal deadline so a
+## mid-flight pipeline cannot have the same value re-queued by a later frontier pass;
+## the pipeline's CHOOSE_ACTION phase schedules the successor. NO free-running advance.
+func _consume_discrete_decision() -> void:
+	if _discrete_due_deadlines.is_empty():
+		return
+	var td: float = _discrete_due_deadlines.pop_front()
+	_discrete_applied_through = maxf(_discrete_applied_through, td)
+	_discrete_decisions_consumed += 1
+	_clear_scheduled_normal_deadline()
+
+
+## Force the next expensive decision to be due IMMEDIATELY (job completion/cancel
+## edge). Queues EXACTLY ONE immediate opportunity anchored at the current frontier.
+## _queue_decision_deadline dedupes exact duplicates, so a repeated force never stacks.
+## Scheduling the SUCCESSOR deadline is CHOOSE_ACTION's job, not here.
+func _force_expensive_decision() -> void:
+	_cancel_pending_idle_decision()
+	var frontier: float = 0.0
+	if SimulationClock != null and SimulationClock.has_method("get_lane_applied_world_time_seconds"):
+		frontier = float(SimulationClock.get_lane_applied_world_time_seconds(TickManager.LEGACY_CORE_LANE_ID))
+	if _state != State.IDLE:
+		return  # only meaningful for an IDLE (or about-to-be) pawn; non-idle resets on its own
+	var anchor: float = maxf(frontier, _discrete_applied_through)
+	if not _is_deadline_queued(anchor):
+		_queue_decision_deadline(anchor)
+		_discrete_decisions_computed += 1
+
+
+## Read-only HK-TIME-P4 diagnostics for the F10 world snapshot.
+func get_pawn_discrete_snapshot_for_diagnostics() -> Dictionary:
+	var pending_normal: int = 0
+	if not _discrete_due_deadlines.is_empty() and _next_decision_world_time < _DISCRETE_DEADLINE_NONE:
+		pending_normal = 1
+	return {
+		"next_decision_world_time": _next_decision_world_time,
+		"applied_through_world_time": _discrete_applied_through,
+		"interval_canonical_seconds": _discrete_decision_interval_canonical(),
+		"queued_due_deadlines": _discrete_due_deadlines.duplicate(),
+		"pending_normal_count": pending_normal,
+		"decisions_computed": _discrete_decisions_computed,
+		"decisions_consumed": _discrete_decisions_consumed,
+		"last_frontier": _discrete_decision_last_frontier,
+	}
+
+
+# ── Resumable Idle Decision Pipeline (#22) ──────────────────────────────────────
+# Splits the expensive IDLE decision into 3 phases, each callable on a separate
+# compat tick. At most ONE pipeline runs per pawn at any time.
+
+func _cancel_pending_idle_decision() -> void:
+	if _idle_decision_phase != IdleDecisionPhase.NONE:
+		HeelKawnian._dp_decisions_cancelled += 1
+	_idle_decision_phase = IdleDecisionPhase.NONE
+	_idle_decision_context = {}
+	_idle_decision_result = "work"
+	_idle_decision_food_emergency = false
+	_idle_decision_started_tick = -1
+	_idle_decision_phase_start_usec = 0
+
+
+func _start_idle_decision_pipeline(food_emergency: bool, now_tick: int) -> void:
+	HeelKawnian._dp_decisions_started += 1
+	_idle_decision_phase = IdleDecisionPhase.BUILD_CONTEXT
+	_idle_decision_food_emergency = food_emergency
+	_idle_decision_started_tick = now_tick
+	_idle_decision_result = "work"
+	_idle_decision_phase_start_usec = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
+
+
+func _has_pending_idle_decision() -> bool:
+	return _idle_decision_phase != IdleDecisionPhase.NONE
+
+
+func _execute_pending_idle_decision() -> bool:
+	if _idle_decision_phase == IdleDecisionPhase.NONE:
+		return false
+	match _idle_decision_phase:
+		IdleDecisionPhase.BUILD_CONTEXT:
+			_phase_build_context()
+		IdleDecisionPhase.CHOOSE_ACTION:
+			_phase_choose_action()
+		IdleDecisionPhase.JOB_SCAN:
+			_phase_job_scan()
+	return true
+
+
+## Phase 1: Build utility context (neural state + goal + context snapshot).
+## Typically the single heaviest phase (~3-12ms from neural forward).
+func _phase_build_context() -> void:
+	var t0: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
+	_idle_decision_context = _build_idle_utility_context(_idle_decision_food_emergency)
+	_cached_utility_context = _idle_decision_context
+	_cached_utility_context_tick = GameManager.tick_count if GameManager != null else 0
+	if OS.is_debug_build() and t0 > 0:
+		var elapsed: int = Time.get_ticks_usec() - t0
+		_dp_track_phase("BUILD_CONTEXT", elapsed)
+	_idle_decision_phase = IdleDecisionPhase.CHOOSE_ACTION
+	_idle_decision_phase_start_usec = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
+
+
+## Phase 2: Choose best action + initialize job-scan infrastructure (caches,
+## callable closures). Lightweight (~0.1-0.5ms) but separated from context
+## build so phase 1 and phase 3 each get their own tick budget.
+func _phase_choose_action() -> void:
+	var t0: int = _idle_decision_phase_start_usec
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	var food_emergency: bool = _idle_decision_food_emergency
+	# Choose best idle action from the context built in phase 1
+	var available_idle_actions: Array = [
+		{"type": "work"},
+		{"type": "wander"},
+	]
+	available_idle_actions.append({"type": "teach"})
+	available_idle_actions.append({"type": "challenge"})
+	if food_emergency:
+		available_idle_actions.append({"type": "forage"})
+	var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, _idle_decision_context)
+	if _decision != null:
+		_decision._cached_idle_action = "work"
+	else:
+		_cached_idle_action = "work"
+	if not best_idle_action.is_empty() and best_idle_action.has("type"):
+		if _decision != null:
+			_decision._cached_idle_action = str(best_idle_action.get("type", "work"))
+		else:
+			_cached_idle_action = str(best_idle_action.get("type", "work"))
+	if _decision != null:
+		_decision._cached_idle_action_food_emergency = food_emergency
+	else:
+		_cached_idle_action_food_emergency = food_emergency
+	_idle_decision_result = _decision._cached_idle_action if _decision != null else _cached_idle_action
+	# Force the job-claim scan to run on this decision tick
+	_last_job_search_tick = now_tick - 61
+	# HK-TIME-P4-FIX2: schedule the NEXT normal decision deadline at this SAME causal
+	# lifecycle point where the legacy tick scheduler scheduled the next decision
+	# (CHOOSE_ACTION). Successor deadline = current authoritative causal frontier +
+	# old_interval_ticks * LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION. NO target,
+	# NO speed-multiplier gameplay branch — the old cadence is preserved exactly, and
+	# while this (resumable, multi-tick) pipeline is pending no additional normal
+	# deadline can accumulate beyond this one scheduled slot.
+	_schedule_next_discrete_deadline()
+	_next_idle_action_refresh_tick = -1
+	if OS.is_debug_build() and t0 > 0:
+		var elapsed: int = Time.get_ticks_usec() - t0
+		_dp_track_phase("CHOOSE_ACTION", elapsed)
+	_idle_decision_phase = IdleDecisionPhase.JOB_SCAN
+	_idle_decision_phase_start_usec = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
+
+
+## Phase 3: Job-scan setup (region caches, priority_cb, base_passes) + the
+## actual claim_next_for loop. Contains the per-job scoring hot path.
+func _phase_job_scan() -> void:
+	var t0: int = _idle_decision_phase_start_usec
+	var now_tick: int = GameManager.tick_count if GameManager != null else 0
+	var food_emergency: bool = _idle_decision_food_emergency
+	var utility_context: Dictionary = _idle_decision_context
+	# Anti-loop: if pawn has abandoned 3+ jobs in the last 10 ticks, force wander
+	if _consecutive_abandons >= 3:
+		var n: int = _consecutive_abandons
+		_consecutive_abandons = 0
+		if GameManager.verbose_logs():
+			print("[HeelKawnian] %s forcing wander after %d consecutive abandons" % [data.display_name, n])
+		_start_wander()
+		_finish_idle_decision_pipeline(t0)
+		return
+	# 10-tick cooldown check (was 60; at 200x, 60 ticks = 660 sim-seconds between scans)
+	var current_tick: int = now_tick
+	if current_tick - _last_job_search_tick < 10:
+		_finish_idle_decision_pipeline(t0)
+		return
+	_last_job_search_tick = current_tick
+	# High-speed throttle
+	var job_claim_interval: int = _job_claim_interval_for_speed()
+	if job_claim_interval > 1:
+		if posmod(now_tick + int(data.id) * 37, job_claim_interval) != 0:
+			var wanderlust_skip: float = lerpf(0.52, 1.68, _bp(3))
+			var skip_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust_skip
+			if _idle_decision_result == "wander":
+				skip_wander_chance *= 1.6
+			if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance, 0.0, 0.35), _pawn_salt(11)):
+				_start_wander()
+			_finish_idle_decision_pipeline(t0)
+			return
+	# FAST PATH: zero open jobs → skip expensive setup
+	if JobManager != null and JobManager.open_count() <= 0:
+		_finish_idle_decision_pipeline(t0)
+		return
+	# Ensure utility context matches current food emergency
+	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
+		utility_context = _build_idle_utility_context(food_emergency)
+		_cached_utility_context = utility_context
+		_cached_utility_context_tick = now_tick
+	# Job scan infrastructure (region caches, callable closures)
+	var my_component: int = _world.pathfinder.component_of(data.tile_pos)
+	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
+	var from_intent: int = int(MemoryManager.get_settlement_intent().get(from_center_region, MemoryManager.INTENT_HOLD))
+	var from_pressure: float = float(MemoryManager.get_settlement_pressure().get(from_center_region, 0.5))
+	var inherited_history_offset: int = _culture_inherited_job_offset()
+	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
+	var work_tile_component_cache: Dictionary = {}
+	var work_tile_region_cache: Dictionary = {}
+	var region_scar_cache: Dictionary = {}
+	var region_history_offset_cache: Dictionary = {}
+	var region_tags_cache: Dictionary = {}
+	var utility_cache: Dictionary = {}
+	var utility_bias_cache: Dictionary = {}
+	var neural_bias_cache: Dictionary = {}
+	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
+	var crisis_housing_pressure: float = 0.0
+	var crisis_food_pressure: float = 0.0
+	var crisis_warmth_pressure: float = 0.0
+	var crisis_cooking_pressure: float = 0.0
+	if ColonySimServices != null:
+		crisis_housing_pressure = ColonySimServices.get_housing_pressure()
+		crisis_food_pressure = ColonySimServices.get_food_pressure()
+		crisis_warmth_pressure = ColonySimServices.get_warmth_pressure()
+		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
+	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
+	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
+	var pawn_cold: bool = data != null and float(data.body_temperature) < 36.5
+	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
+		if work_tile_region_cache.has(work_tile):
+			return int(work_tile_region_cache[work_tile])
+		var rk: int = _WM._region_key(work_tile.x, work_tile.y)
+		work_tile_region_cache[work_tile] = rk
+		return rk
+	var resolve_component_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
+		if work_tile_component_cache.has(work_tile):
+			return int(work_tile_component_cache[work_tile])
+		var comp: int = _world.pathfinder.component_of(work_tile)
+		work_tile_component_cache[work_tile] = comp
+		return comp
+	var resolve_region_scar_level: Callable = func(region_key: int) -> int:
+		if region_scar_cache.has(region_key):
+			return int(region_scar_cache[region_key])
+		var sl: int = int(WorldPersistence.get_region_scar_level(region_key))
+		region_scar_cache[region_key] = sl
+		return sl
+	var resolve_history_offset_for_region: Callable = func(region_key: int) -> int:
+		if region_history_offset_cache.has(region_key):
+			return int(region_history_offset_cache[region_key])
+		var scar_level: int = int(resolve_region_scar_level.call(region_key))
+		var scar_offset: int = int(scar_priority_for_level.get(scar_level, 0))
+		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
+		var intent_delta: int = 0
+		if not (from_center_region < 0 and to_center < 0):
+			var to_intent: int = int(MemoryManager.get_settlement_intent().get(to_center, MemoryManager.INTENT_HOLD))
+			var to_pressure: float = float(MemoryManager.get_settlement_pressure().get(to_center, 0.5))
+			if to_intent == MemoryManager.INTENT_GROW:
+				intent_delta += 3
+			elif to_intent == MemoryManager.INTENT_ABANDON:
+				intent_delta -= 4
+			if to_pressure < from_pressure:
+				intent_delta += 1
+			elif to_pressure > from_pressure + 0.12:
+				intent_delta -= 1
+			if from_intent == MemoryManager.INTENT_ABANDON and to_intent != MemoryManager.INTENT_ABANDON:
+				intent_delta += 2
+			elif from_intent != MemoryManager.INTENT_ABANDON and to_intent == MemoryManager.INTENT_ABANDON:
+				intent_delta -= 2
+		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
+		region_history_offset_cache[region_key] = history_offset
+		return history_offset
+	var resolve_region_tags: Callable = func(region_key: int) -> PackedStringArray:
+		if region_tags_cache.has(region_key):
+			return PackedStringArray(region_tags_cache[region_key])
+		var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
+		region_tags_cache[region_key] = tags
+		return tags
+	# Priority callback (evaluated per open job in claim_next_for)
+	var priority_cb: Callable = func(j: Job) -> int:
+		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
+		var _is_food_job_type: bool = j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_FISH or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.PLANT_SEEDS
+		var _is_rest_job_type: bool = j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.BUILD_FIRE_PIT
+		if data.hunger <= HUNGER_EMERGENCY:
+			if not _is_food_job_type:
+				return -999
+		elif data.hunger <= HUNGER_EAT_THRESHOLD:
+			if not _is_food_job_type:
+				base_bias -= 12
+		if data.rest <= REST_PANIC_THRESHOLD:
+			if not _is_rest_job_type and not _is_food_job_type:
+				base_bias -= 10
+		var _need_urgency_scale: float = 1.0
+		if data.hunger <= HUNGER_EAT_THRESHOLD:
+			_need_urgency_scale = clampf(data.hunger / HUNGER_EAT_THRESHOLD, 0.0, 1.0)
+		elif data.rest <= REST_SLEEP_THRESHOLD:
+			_need_urgency_scale = clampf(data.rest / REST_SLEEP_THRESHOLD, 0.0, 1.0)
+		if not is_job_history_critical(j.type):
+			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
+		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
+			base_bias += AFFINITY_JOB_PRIORITY_BONUS
+		if not food_emergency and data.current_profession != HeelKawnianData.Profession.NONE:
+			var prof: int = data.current_profession
+			var prof_bonus: int = 3
+			if _need_urgency_scale < 1.0:
+				prof_bonus = clampi(int(round(float(prof_bonus) * _need_urgency_scale)), 2, 4)
+			match prof:
+				HeelKawnianData.Profession.FARMER:
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS \
+							or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.COOK_FISH:
+						base_bias += prof_bonus
+				HeelKawnianData.Profession.BUILDER:
+					if _is_structure_build_job(j.type):
+						var build_skill_bonus: int = 2 + int(data.get_skill_level(HeelKawnianData.Skill.BUILDING) / 5)
+						base_bias += clampi(build_skill_bonus, 2, 6)
+				HeelKawnianData.Profession.GATHERER:
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
+						base_bias += prof_bonus
+				HeelKawnianData.Profession.WARRIOR:
+					if j.type == _Job.Type.HUNT or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
+						base_bias += prof_bonus
+				HeelKawnianData.Profession.SCHOLAR:
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						base_bias += prof_bonus
+		var action_key: String = _utility_action_for_job(int(j.type))
+		var utility_bias: int = 0
+		if utility_bias_cache.has(action_key):
+			utility_bias = int(utility_bias_cache[action_key])
+		else:
+			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
+			utility_bias_cache[action_key] = utility_bias
+		base_bias += utility_bias
+		base_bias += data.kinship_job_priority_bonus(j.work_tile)
+		base_bias += _goal_priority_bias_for_job(j.type)
+		base_bias += _short_horizon_bias_for_job(j)
+		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
+		if personal_conf < 0.3:
+			base_bias -= 3
+		elif personal_conf > 0.7:
+			base_bias += 2
+		var learning_weight: float = _learning_weight_for_job(j.type)
+		if absf(learning_weight - 1.0) >= 0.01:
+			base_bias += int(round((learning_weight - 1.0) * 4.0))
+		if _idle_decision_result == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+			base_bias += 2
+		if not food_emergency:
+			var local_warmth_press: float = 0.0
+			if ColonySimServices != null and data != null and SettlementMemory != null:
+				var pawn_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
+				var center_rk: int = SettlementMemory.get_center_region_for_region(pawn_rk)
+				if center_rk >= 0:
+					local_warmth_press = ColonySimServices.get_warmth_pressure(center_rk)
+			var warmth_need: float = maxf(crisis_warmth_pressure, local_warmth_press)
+			var colony_needs_build: bool = pawn_cold \
+					or warmth_need > 0.20 \
+					or crisis_housing_pressure > 0.5 \
+					or crisis_cooking_pressure > 0.3
+			if pawn_cold or colony_needs_build:
+				match int(j.type):
+					_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
+						base_bias += 3
+					_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
+					_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
+					_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
+					_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
+					_Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
+					_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
+					_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD, \
+					_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, \
+					_Job.Type.BUILD_BREWERY, _Job.Type.BUILD_TAVERN, \
+					_Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL:
+						base_bias += 6
+					_Job.Type.BUILD_FIRE_PIT:
+						if pawn_cold or crisis_warmth_pressure > 0.2:
+							base_bias += 6
+					_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES:
+						var cook_boost: int = 4
+						if data.is_carrying() and Item.is_food(data.carrying):
+							if data.carrying == _Item.Type.MEAT or data.carrying == _Item.Type.BERRY:
+								if ColonySimServices != null and ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
+									cook_boost += 3
+								else:
+									cook_boost += 1
+						if crisis_cooking_pressure > 0.2 or cook_boost > 4:
+							base_bias += cook_boost
+				if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
+					if warmth_need > 0.25 or crisis_housing_pressure > 0.45:
+						base_bias -= 4
+					elif crisis_food_pressure < 0.15:
+						base_bias -= 2
+					else:
+						base_bias -= 1
+			if crisis_food_pressure < 0.12 and warmth_need > 0.18:
+				match int(j.type):
+					_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_BED, \
+					_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES:
+						base_bias += 5
+		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
+			base_bias += 8
+		if j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_HEARTH:
+			if pawn_cold or crisis_warmth_pressure > 0.5:
+				base_bias += 5
+			elif crisis_warmth_pressure > 0.25:
+				base_bias += 2
+		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+			base_bias += 4
+		var survival_not_met: bool = crisis_food_pressure > 0.55 \
+				or crisis_housing_pressure > 0.70 \
+				or crisis_warmth_pressure > 0.40
+		if survival_not_met:
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.GROW_FOOD, _Job.Type.HARVEST_CROPS, \
+				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, \
+				_Job.Type.BUILD_HERB_GARDEN:
+					base_bias -= 10
+		elif crisis_food_pressure <= 0.40 and ColonySimServices != null \
+				and ColonySimServices.colony_contentment_period():
+			match int(j.type):
+				_Job.Type.PLANT_SEEDS, _Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, \
+				_Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN:
+					base_bias += 2
+		if crisis_food_pressure > 0.35 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
+			base_bias += 3
+		if ColonySimServices != null:
+			var haul_p: float = ColonySimServices.get_haul_pressure()
+			var store_p: float = ColonySimServices.get_storage_pressure()
+			if haul_p > 0.35 or store_p > 0.3:
+				if j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(int(ceil(maxf(haul_p, store_p) * 4.0)), 2, 5)
+			if _world != null and _world.has_method("sum_ground_resources"):
+				var center_rk2: int = SettlementMemory.get_center_region_for_region(
+						WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
+				var ground: Dictionary = _world.sum_ground_resources(center_rk2)
+				var ground_food: int = int(ground.get("food", 0))
+				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
+				if ground_food >= 1 and crisis_food_pressure > 0.4 and j.type == _Job.Type.TRADE_HAUL:
+					base_bias += 2
+		if _is_structure_build_job(j.type):
+			var my_sid_ls: int = SettlementMemory.get_settlement_id_for_pawn(int(data.id))
+			if my_sid_ls >= 0:
+				var ruler_id_ls: int = SettlementMemory.get_ruler_pawn_id(my_sid_ls)
+				if ruler_id_ls >= 0 and ruler_id_ls != int(data.id):
+					var ruler_data_ls: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(ruler_id_ls)
+					if ruler_data_ls != null:
+						var dist_to_ruler_ls: int = absi(data.tile_pos.x - ruler_data_ls.tile_pos.x) + absi(data.tile_pos.y - ruler_data_ls.tile_pos.y)
+						if dist_to_ruler_ls <= 12:
+							base_bias += 3
+		var neural_bias: int = 0
+		if neural_bias_cache.has(j.type):
+			neural_bias = int(neural_bias_cache[j.type])
+		else:
+			neural_bias = _get_neural_job_priority_bias(j.type)
+			neural_bias_cache[j.type] = neural_bias
+		base_bias += neural_bias
+		base_bias += _get_heelkawnian_matrix_job_bias(j.type)
+		base_bias = _apply_social_influence_bias(j, base_bias)
+		var meaning_bias: int = 0
+		var job_rk: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+		var job_tags: PackedStringArray = resolve_region_tags.call(job_rk)
+		for _mt in job_tags:
+			match _mt:
+				"repeated_death", "blood_soaked", "graveyard":
+					meaning_bias -= 2
+				"cursed":
+					meaning_bias -= 3
+				"old_death_place":
+					meaning_bias -= 3
+				"ancient_death_place":
+					meaning_bias -= 4
+				"old_famine":
+					meaning_bias -= 2
+				"ancient_famine":
+					meaning_bias -= 3
+				"famine_stricken", "hunger_place":
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
+						meaning_bias += 2
+					else:
+						meaning_bias -= 1
+				"fire_prone":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 1
+				"safe_hearth", "fertile":
+					meaning_bias += 1
+				"old_heart":
+					meaning_bias += 2
+				"ancient_heart":
+					meaning_bias += 3
+				"learned", "educated":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 2
+				"old_wisdom":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 3
+				"ancient_wisdom":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 4
+				"ruined":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias += 1
+				"burial_grove":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 2
+					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+						meaning_bias += 2
+				"faded_burial_grove":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias -= 1
+				"teaching_ground":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 3
+				"faded_teaching_ground":
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 1
+				"feast_ground":
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
+						meaning_bias += 2
+				"faded_feast_ground":
+					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
+						meaning_bias += 1
+				"builder_yard":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
+						meaning_bias += 2
+				"faded_builder_yard":
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
+						meaning_bias += 1
+				"gathering_place":
+					meaning_bias += 1
+					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
+						meaning_bias += 1
+				"faded_gathering_place":
+					meaning_bias += 1
+				"craftsman_quarter":
+					meaning_bias += 2
+					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
+						meaning_bias += 2
+				"industrial":
+					meaning_bias += 1
+				"forge_echo":
+					meaning_bias += 2
+				"faded_forge_echo":
+					meaning_bias += 1
+				"governed":
+					meaning_bias += 1
+				"seat_of_power":
+					meaning_bias += 2
+					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+						meaning_bias += 2
+				"trading_post":
+					meaning_bias += 1
+					if j.type == _Job.Type.FORAGE:
+						meaning_bias += 2
+				"merchant_quarter":
+					meaning_bias += 2
+				"market_echo":
+					meaning_bias += 1
+				"faded_market_echo":
+					meaning_bias += 1
+				"war_torn":
+					meaning_bias -= 3
+					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+						meaning_bias += 3
+				"grudge_haunted":
+					meaning_bias -= 1
+				"war_echo":
+					meaning_bias -= 2
+					if j.type == _Job.Type.DEFEND:
+						meaning_bias += 2
+				"faded_war_echo":
+					meaning_bias -= 1
+				"dangerous_ground":
+					meaning_bias -= 2
+				"blood_stained":
+					meaning_bias -= 1
+				"storied":
+					meaning_bias += 1
+				"ancient_lineage":
+					meaning_bias += 2
+				"sacred":
+					meaning_bias += 1
+					if j.type == _Job.Type.TEACH_SKILL:
+						meaning_bias += 2
+				"hallowed":
+					meaning_bias += 2
+				"sanctuary_echo":
+					meaning_bias += 2
+				"faded_sanctuary_echo":
+					meaning_bias += 1
+				"old_forge":
+					meaning_bias += 1
+				"ancient_forge":
+					meaning_bias += 2
+				"old_throne":
+					meaning_bias += 1
+				"ancient_throne":
+					meaning_bias += 2
+				"old_battleground":
+					meaning_bias -= 2
+					if j.type == _Job.Type.DEFEND:
+						meaning_bias += 2
+				"ancient_battleground":
+					meaning_bias -= 3
+					if j.type == _Job.Type.DEFEND:
+						meaning_bias += 3
+				"old_sanctuary":
+					meaning_bias += 1
+				"ancient_sanctuary":
+					meaning_bias += 2
+				"old_market":
+					meaning_bias += 1
+				"ancient_market":
+					meaning_bias += 2
+				"world_touched":
+					meaning_bias += 1
+		base_bias += meaning_bias
+		var zone_bias: int = 0
+		var job_tile: Vector2i = j.work_tile
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.FORAGE):
+			if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.FISH:
+				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD):
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
+				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
+			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
+				zone_bias += 6
+		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY):
+			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
+				zone_bias += 4
+		base_bias += zone_bias
+		var my_sid_pc: int = SettlementMemory.get_settlement_id_for_region(from_region_key)
+		if my_sid_pc >= 0:
+			var job_sid_pc: int = SettlementMemory.get_settlement_id_for_region(job_rk)
+			if job_sid_pc >= 0 and job_sid_pc == my_sid_pc:
+				base_bias += 5
+			elif job_sid_pc >= 0 and job_sid_pc != my_sid_pc:
+				base_bias -= 3
+		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.TRADE_HAUL:
+			base_bias += int(round((_bp(0) - 0.5) * 8.0))
+		if _is_structure_build_job(j.type):
+			base_bias += int(round((_bp(1) - 0.5) * 10.0))
+		if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
+			base_bias += int(round((_bp(2) - 0.5) * 6.0))
+		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
+			base_bias += int(round((_bp(2) - 0.5) * -4.0))
+		if j.issuer_pawn_id >= 0:
+			base_bias += int(round((_bp(3) - 0.5) * 5.0))
+		var job_scar: int = int(resolve_region_scar_level.call(job_rk))
+		if job_scar >= 2:
+			base_bias += int(round((_bp(4) - 0.5) * -12.0))
+		if j.type == _Job.Type.HUNT or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
+			base_bias += int(round((_bp(6) - 0.5) * 8.0))
+		if j.social_weight > 0.01:
+			base_bias += int(round((_bp(7) - 0.5) * 4.0))
+		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
+		if FactionManager != null and FactionManager.has_method("apply_authority_bonus"):
+			return FactionManager.apply_authority_bonus(base_bias, int(data.id))
+		return base_bias
+	# base_passes: eligibility + supply filter (cheap per-job)
+	var base_passes: Callable = func(j: Job) -> bool:
+		if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
+			return false
+		if _job_claim_cooldowns.has(int(j.id)):
+			var cooldown_until: int = int(_job_claim_cooldowns[int(j.id)])
+			var cur_tick: int = GameManager.tick_count if GameManager != null else 0
+			if cooldown_until > cur_tick:
+				return false
+			else:
+				_job_claim_cooldowns.erase(int(j.id))
+		if not data.allows_job_type(j.type):
+			return false
+		var rk_filter: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
+		if not is_job_history_critical(j.type):
+			if int(resolve_region_scar_level.call(rk_filter)) >= 3:
+				return false
+		if int(resolve_component_for_work_tile.call(j.work_tile)) != my_component:
+			return false
+		var mats: Dictionary = _materials_for_active_build(j)
+		if not mats.is_empty():
+			if StockpileManager._zones.is_empty():
+				pass
+			else:
+				if StockpileManager.total_count_of(mats.item) < mats.qty:
+					return false
+		var is_primitive_job: bool = j.type in [
+			_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER,
+			_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_HEARTH,
+			_Job.Type.BUILD_STOCKPILE, _Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
+			_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
+			_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK
+		]
+		if TechnologySystem != null and not is_primitive_job:
+			var settle_center: int = int(from_center_region)
+			if settle_center >= 0:
+				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
+					return false
+		return true
+	# MATRIX DECISION
+	if _maybe_matrix_decide_job(priority_cb, base_passes):
+		_finish_idle_decision_pipeline(t0)
+		return
+	if food_emergency:
+		var food_only: Callable = func(j: Job) -> bool:
+			if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
+				return false
+			if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH:
+				return false
+			return base_passes.call(j)
+		var food_job: Job = JobManager.claim_next_for(self, food_only, priority_cb)
+		if food_job != null:
+			_begin_job(food_job)
+			_finish_idle_decision_pipeline(t0)
+			return
+	# GOAL-DIRECTED FILTERING
+	var goal_type: String = str((_decision._cached_active_goal if _decision != null else _cached_active_goal).get("type", ""))
+	var goal_priority: float = _decision._cached_active_goal_priority if _decision != null else _cached_active_goal_priority
+	var goal_filter: Callable = base_passes
+	if goal_priority > 0.7 and not goal_type.is_empty():
+		match goal_type:
+			"find_food":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH and j.type != _Job.Type.COOK_MEAT and j.type != _Job.Type.COOK_FISH and j.type != _Job.Type.COOK_BERRIES and j.type != _Job.Type.PLANT_SEEDS and j.type != _Job.Type.HARVEST_CROPS:
+						return false
+					return base_passes.call(j)
+			"find_rest":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.BUILD_BED and j.type != _Job.Type.BUILD_SHELTER and j.type != _Job.Type.BUILD_HEARTH and j.type != _Job.Type.BUILD_FIRE_PIT:
+						return false
+					return base_passes.call(j)
+			"improve_safety":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.BUILD_WALL and j.type != _Job.Type.BUILD_DOOR and j.type != _Job.Type.BUILD_WATCHTOWER and j.type != _Job.Type.BUILD_BARRACKS and j.type != _Job.Type.PROTECT and j.type != _Job.Type.DEFEND:
+						return false
+					return base_passes.call(j)
+			"build_reputation", "seek_leadership":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.TEACH_SKILL and j.type != _Job.Type.APPRENTICESHIP and j.type != _Job.Type.BUILD_MARKER_STONE:
+						return false
+					return base_passes.call(j)
+			"leave_legacy":
+				goal_filter = func(j: Job) -> bool:
+					if j.type != _Job.Type.CARVE_LEDGER_STONE and j.type != _Job.Type.CARVE_KNOWLEDGE_STONE and j.type != _Job.Type.CARVE_GRAVE_MARKER:
+						return false
+					return base_passes.call(j)
+	var profession_bonus: Callable = _get_profession_priority_bonus
+	var _rjp_world = _world
+	var _rjp_cs = ColonySimServices if ColonySimServices != null else null
+	var reactive_bonus: Callable = func(j: Job) -> int:
+		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
+	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus), reactive_bonus))
+	if job != null:
+		_begin_job(job)
+		_finish_idle_decision_pipeline(t0)
+		return
+	# GOAL FALLBACK
+	var profession_bonus2: Callable = _get_profession_priority_bonus
+	var _rjp_world2 = _world
+	var _rjp_cs2 = ColonySimServices if ColonySimServices != null else null
+	var reactive_bonus2: Callable = func(j: Job) -> int:
+		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world2, _rjp_cs2))
+	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus2), reactive_bonus2))
+	if job2 != null:
+		_begin_job(job2)
+		if data != null and PawnCommunicationLog != null:
+			PawnCommunicationLog.log_work_announcement(
+				int(data.id),
+				data.display_name,
+				job2.type,
+				job2.work_tile,
+				"Priority: %d" % job2.priority
+			)
+		if data != null and PawnChatterBubbles != null:
+			PawnChatterBubbles.show_work_bubble(int(data.id), self, job2.type)
+		_finish_idle_decision_pipeline(t0)
+		return
+	# Nothing to do: idle wander
+	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
+	var wander_score: float = _utility_score_normalized("wander", utility_context)
+	var wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust2 * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
+	if _idle_decision_result == "wander":
+		wander_chance *= 1.6
+	if ColonySimServices != null and ColonySimServices.get_food_pressure() < 0.22:
+		wander_chance *= 2.2
+	if data != null and data.mood >= 55.0:
+		wander_chance *= 1.35
+	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.42), _pawn_salt(11)):
+		_start_wander()
+	_finish_idle_decision_pipeline(t0)
+
+
+func _finish_idle_decision_pipeline(phase_start_usec: int) -> void:
+	if OS.is_debug_build() and phase_start_usec > 0:
+		var elapsed: int = Time.get_ticks_usec() - phase_start_usec
+		_dp_track_phase("JOB_SCAN", elapsed)
+	HeelKawnian._dp_decisions_completed += 1
+	_idle_decision_phase = IdleDecisionPhase.NONE
+	_idle_decision_context = {}
+
+
+static func _dp_track_phase(phase_name: String, elapsed_us: int) -> void:
+	var key: String = "phase_%s" % phase_name
+	if not _dp_phase_max_usec.has(key) or elapsed_us > int(_dp_phase_max_usec[key]):
+		_dp_phase_max_usec[key] = elapsed_us
 
 
 func _should_panic_sleep() -> bool:
@@ -4436,8 +5945,9 @@ func _start_wander_toward(target: Vector2i) -> void:
 
 
 func _tick_idle() -> void:
-	var _t_idle_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _t_idle_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
 	var _t_idle_sub: int = _t_idle_start
+	var _pd_idle: int = _pd_begin()
 	# Route to urge-driven architecture when flag is enabled
 	if USE_URGE_ARCHITECTURE:
 		_tick_idle_urge()
@@ -4490,6 +6000,8 @@ func _tick_idle() -> void:
 			else:
 				_begin_haul_to_stockpile()
 			return
+	_pd_accum("idle/emergency_carry", _pd_idle)
+	_pd_idle = _pd_begin()
 	# 2a. Periodic gear check: try equipping better gear from stockpile (every 200 ticks)
 	if GameManager.tick_count % 200 == int(data.id) % 200:
 		if CraftingSystem != null and CraftingSystem.has_method("try_equip_from_stockpile"):
@@ -4509,6 +6021,8 @@ func _tick_idle() -> void:
 	var food_emergency: bool = HeelKawnian._s_food_emergency
 	_refresh_learning_weight_cache()
 	_refresh_active_goal_cache()
+	_pd_accum("idle/foodcache", _pd_idle)
+	_pd_idle = _pd_begin()
 	# BUNDLE 4: Medium/social/narrative lanes — non-critical autonomy
 	# work is phased by stable pawn id so idle ticks stay cheap at high speed.
 	# These are non-critical for survival; urgent eating/sleeping gates above are unaffected.
@@ -4543,6 +6057,8 @@ func _tick_idle() -> void:
 		# 2c. Human ladder affiliation: household -> clan -> nation.
 		if _try_heelkawnian_affiliation_action():
 			return
+	_pd_accum("idle/lanes", _pd_idle)
+	_pd_idle = _pd_begin()
 	# 3. Need-driven: hungry + food nearby -> go eat
 	if _maybe_start_eating():
 		return
@@ -4565,6 +6081,8 @@ func _tick_idle() -> void:
 	# 4. Tired -> sleep. Skipped if we're starving (food first, sleep when full).
 	if _maybe_start_sleeping():
 		return
+	_pd_accum("idle/needs", _pd_idle)
+	_pd_idle = _pd_begin()
 	# 4a. SITUATIONAL AWARENESS: if cold and fire nearby, walk to it.
 	# This is smarter than just sleeping — actively seek warmth.
 	if data != null and data.body_temperature < 36.5:
@@ -4617,41 +6135,67 @@ func _tick_idle() -> void:
 	if run_medium_lane:
 		if _try_autonomy_social_seek():
 			return
+	_pd_accum("idle/awareness_narrative", _pd_idle)
+	_pd_idle = _pd_begin()
 	var preferred_idle_action: String = "work"
-	var should_refresh_idle_action: bool = false
 	var utility_context: Dictionary = _cached_utility_context
-	if data != null:
-		should_refresh_idle_action = (
-			_next_idle_action_refresh_tick < 0
-			or now_tick >= _next_idle_action_refresh_tick
-			or (_decision._cached_idle_action_food_emergency if _decision != null else _cached_idle_action_food_emergency) != food_emergency
+	if _cached_utility_context_tick != now_tick:
+		utility_context = {}
+	# ── RESUMABLE IDLE DECISION PIPELINE (#22) ──────────────────────────────
+	# Cancel pending idle decision only on REAL survival emergencies.
+	# The _next_expensive_decision_tick<0 scheduling signal is NOT a real
+	# emergency — it is already handled by _force_expensive_decision() which
+	# calls _cancel_pending_idle_decision() directly. Using _expensive_decision_urgent
+	# here would re-cancel on every tick (tick<0 is always true after force),
+	# creating an infinite cancel-restart loop where decisions never complete.
+	if _has_pending_idle_decision() and data != null:
+		var _real_survival_emergency: bool = (
+			data.hunger <= HUNGER_EMERGENCY
+			or data.rest <= REST_PANIC_THRESHOLD
+			or (data.hunger <= HUNGER_EAT_THRESHOLD and food_emergency)
 		)
-		if should_refresh_idle_action:
-			utility_context = _build_idle_utility_context(food_emergency)
-			var available_idle_actions: Array = [
-				{"type": "work"},
-				{"type": "wander"},
-			]
-			available_idle_actions.append({"type": "teach"})
-			available_idle_actions.append({"type": "challenge"})
-			if food_emergency:
-				available_idle_actions.append({"type": "forage"})
-			var best_idle_action: Dictionary = data.choose_best_action(available_idle_actions, utility_context)
-			if _decision != null:
-				_decision._cached_idle_action = "work"
+		if _real_survival_emergency:
+			_cancel_pending_idle_decision()
+	# Resume an in-progress pipeline phase (each phase = one compat tick).
+	if _has_pending_idle_decision():
+		var _pd_resume_t0: int = _pd_begin()
+		_execute_pending_idle_decision()
+		_pd_accum("idle/resume_pipeline", _pd_resume_t0)
+		preferred_idle_action = _decision._cached_idle_action if _decision != null else _cached_idle_action
+		utility_context = _idle_decision_context
+	else:
+		# No pending decision — check the discrete cadence/profiling to start a new
+		# pipeline. HK-TIME-P4: due now = a pawn_discrete frontier deadline is pending
+		# (or a real survival emergency overrides) — NEVER the legacy compat-tick
+		# schedule, so timing cannot double-run.
+		var _cad_decision_due: bool = _discrete_decision_due(food_emergency)
+		if _cad_decision_due:
+			HeelKawnian._cad_expensive_decisions += 1
+			if _expensive_decision_urgent(food_emergency):
+				HeelKawnian._cad_forced_decisions += 1
+		elif _state == State.IDLE:
+			HeelKawnian._cad_decisions_skipped_not_due += 1
+		if data != null:
+			var should_refresh_idle_action: bool = (
+				_next_idle_action_refresh_tick < 0
+				or now_tick >= _next_idle_action_refresh_tick
+				or (_decision._cached_idle_action_food_emergency if _decision != null else _cached_idle_action_food_emergency) != food_emergency
+			)
+			if _cad_decision_due and should_refresh_idle_action:
+				# Only a REAL pipeline start advances applied-through: consume the OLDEST
+				# queued due deadline NOW as an applied decision (cadence stays one idle
+				# decision per tick; a queued-but-unstarted deadline never commits history).
+				_consume_discrete_decision()
+				var _pd_ca_t0: int = _pd_begin()
+				_start_idle_decision_pipeline(food_emergency, now_tick)
+				_pd_accum("idle/start_pipeline", _pd_ca_t0)
 			else:
-				_cached_idle_action = "work"
-			if not best_idle_action.is_empty() and best_idle_action.has("type"):
-				if _decision != null:
-					_decision._cached_idle_action = str(best_idle_action.get("type", "work"))
-				else:
-					_cached_idle_action = str(best_idle_action.get("type", "work"))
-			if _decision != null:
-				_decision._cached_idle_action_food_emergency = food_emergency
-			else:
-				_cached_idle_action_food_emergency = food_emergency
-			_next_idle_action_refresh_tick = now_tick + _idle_action_refresh_interval_for_speed()
-			preferred_idle_action = _decision._cached_idle_action if _decision != null else _cached_idle_action
+				if not _cad_decision_due and _decision != null:
+					preferred_idle_action = _decision._cached_idle_action
+				elif not _cad_decision_due:
+					preferred_idle_action = _cached_idle_action
+	_pd_accum("idle/util_build_context", _pd_idle)
+	_pd_idle = _pd_begin()
 	# 5. Social cognition: choose one social action first, then fall back.
 	# Teaching/challenge can scan nearby pawns; run them only on the social lane.
 	if run_social_lane:
@@ -4680,7 +6224,6 @@ func _tick_idle() -> void:
 	if run_nearby_lane and data != null and data.current_profession != HeelKawnianData.Profession.WARRIOR:
 		var aw: Dictionary = _refresh_awareness()
 		if aw.get("is_in_danger_zone", false):
-			# In a danger zone — try to move to safety
 			var shelter: Vector2i = aw.get("nearest_shelter", Vector2i(-9999, -9999))
 			var fire: Vector2i = aw.get("nearest_fire", Vector2i(-9999, -9999))
 			var safe_target: Vector2i = Vector2i(-9999, -9999)
@@ -4696,749 +6239,56 @@ func _tick_idle() -> void:
 					if GameManager.verbose_logs():
 						print("[HeelKawnian] %s fleeing danger zone → %s" % [data.display_name, safe_target])
 					return
-	# (Cultural exposure, rediscovery, diaspora moved to narrative lane above)
-	# 6. Job queue: take the best reachable job. We additionally skip build
-	# jobs whose required materials aren't on hand at the stockpile -- this
-	# prevents pawns from claim/abort looping when wood is empty.
-	# ANTI-LOOP: If pawn has abandoned 3+ jobs in the last 10 ticks, force a wander
-	# to break the cycle instead of immediately re-claiming.
-	if _consecutive_abandons >= 3:
-		var n: int = _consecutive_abandons
-		_consecutive_abandons = 0
-		if GameManager.verbose_logs():
-			print("[HeelKawnian] %s forcing wander after %d consecutive abandons" % [data.display_name, n])
-		_start_wander()
-		return
-	#
-	# Food-emergency override: if the stockpile is almost out of food, do
-	# *one* preferential pass restricted to FORAGE jobs, then fall back to the
-	# normal filter if no forage is available. Stops the colony from happily
-	# mining stone while everyone starves.
-	
-	# PERF: 60-tick cooldown on repeated failed idle job scans.
-	# Pawns with no reachable work were rescanning the board every stride
-	# tick (~895ms state_dispatch at scale). Survival gates above are NOT
-	# affected — they still run every eligible idle tick.
-	var current_tick = GameManager.tick_count if GameManager else 0
-	if current_tick - _last_job_search_tick < 60:
-		return
-	_last_job_search_tick = current_tick
-	
-	# High-speed throttle: healthy idle pawns do not need a full job scan every tick.
-	# Survival gates above still run every eligible idle tick.
-	var job_claim_interval: int = _job_claim_interval_for_speed()
-	if job_claim_interval > 1:
-		if posmod(now_tick + int(data.id) * 37, job_claim_interval) != 0:
-			var wanderlust_skip: float = lerpf(0.52, 1.68, _bp(3))
-			var skip_wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust_skip
+	_pd_accum("idle/utility_social", _pd_idle)
+	_pd_idle = _pd_begin()
+	# ── Pipeline phases 1-3 handle utility context, action choice, and job scan.
+	# On non-decision ticks (or when a pipeline is in progress), only cheap wander
+	# runs here. The old inline job-scan block is now inside _phase_job_scan().
+	if not _has_pending_idle_decision():
+		# No pipeline active → decision not due, or pipeline just completed.
+		# Cheap wander for non-decision ticks.
+		var _cad_decision_due2: bool = _discrete_decision_due(food_emergency)
+		if not _cad_decision_due2:
+			HeelKawnian._cad_decisions_skipped_not_due += 1
+			var _pd_cw2_t0: int = _pd_begin()
+			var skip_wander_chance2: float = WANDER_CHANCE_PER_TICK
 			if preferred_idle_action == "wander":
-				skip_wander_chance *= 1.6
-			if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance, 0.0, 0.35), _pawn_salt(11)):
+				skip_wander_chance2 *= 1.6
+			if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance2, 0.0, 0.35), _pawn_salt(12)):
 				_start_wander()
+			_pd_accum("idle/cheap_wander", _pd_cw2_t0)
+			if TickProfiler != null and TickProfiler.is_enabled():
+				TickProfiler.record_idle("job_search", Time.get_ticks_usec() - _t_idle_sub)
 			return
-
-	# FAST PATH: If there are zero open jobs, skip the entire expensive
-	# job-search setup (priority_cb lambda, base_passes lambda, 20+ variable
-	# declarations). This is the single biggest performance win — the setup
-	# costs ~23ms per idle tick and is useless when there's nothing to claim.
-	if JobManager != null and JobManager.open_count() <= 0:
-		if OS.is_debug_build() and TickProfiler != null:
-			TickProfiler.record_idle("job_search", Time.get_ticks_usec() - _t_idle_sub)
-		return
-
-	if OS.is_debug_build() and TickProfiler != null:
+	_pd_accum("idle/jobscan_gate", _pd_idle)
+	_pd_idle = _pd_begin()
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_idle("job_search", Time.get_ticks_usec() - _t_idle_sub)
-		_t_idle_sub = Time.get_ticks_usec()
-	if utility_context.is_empty() or (_decision._cached_utility_food_emergency if _decision != null else _cached_utility_food_emergency) != food_emergency:
-		utility_context = _build_idle_utility_context(food_emergency)
-	
-	var my_component: int = _world.pathfinder.component_of(data.tile_pos)
-	# Treat the whole pantry (berries + meat + any future food) as one number
-	# summed across every registered zone. Counting only berries was fine
-	# before HUNT existed; now a colony living on hunted meat would have
-	# looked like it was starving. And with Phase-10 multi-zone stockpiles
-	# we have to sum across zones, not peek at one hardcoded pile.
-	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
-	var utility_cache: Dictionary = {}
-	var utility_bias_cache: Dictionary = {}
-	var neural_bias_cache: Dictionary = {}
-	var work_tile_component_cache: Dictionary = {}
-	var work_tile_region_cache: Dictionary = {}
-	var region_scar_cache: Dictionary = {}
-	var region_history_offset_cache: Dictionary = {}
-	var inherited_history_offset: int = _culture_inherited_job_offset()
-	var crisis_housing_pressure: float = 0.0
-	var crisis_food_pressure: float = 0.0
-	var crisis_warmth_pressure: float = 0.0
-	var crisis_cooking_pressure: float = 0.0
-	if ColonySimServices != null:
-		crisis_housing_pressure = ColonySimServices.get_housing_pressure()
-		crisis_food_pressure = ColonySimServices.get_food_pressure()
-		crisis_warmth_pressure = ColonySimServices.get_warmth_pressure()
-		crisis_cooking_pressure = ColonySimServices.get_cooking_pressure()
-	var from_region_key: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
-	var from_center_region: int = SettlementMemory.get_center_region_for_region(from_region_key)
-	var from_intent: int = int(MemoryManager.get_settlement_intent().get(from_center_region, MemoryManager.INTENT_HOLD))
-	var from_pressure: float = float(MemoryManager.get_settlement_pressure().get(from_center_region, 0.5))
-	var scar_priority_for_level: Dictionary = {0: 0, 1: -5, 2: -24}
-	
-	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
-		if work_tile_region_cache.has(work_tile):
-			return int(work_tile_region_cache[work_tile])
-		var rk: int = _WM._region_key(work_tile.x, work_tile.y)
-		work_tile_region_cache[work_tile] = rk
-		return rk
-	
-	var resolve_component_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
-		if work_tile_component_cache.has(work_tile):
-			return int(work_tile_component_cache[work_tile])
-		var comp: int = _world.pathfinder.component_of(work_tile)
-		work_tile_component_cache[work_tile] = comp
-		return comp
-	
-	var resolve_region_scar_level: Callable = func(region_key: int) -> int:
-		if region_scar_cache.has(region_key):
-			return int(region_scar_cache[region_key])
-		var sl: int = int(WorldPersistence.get_region_scar_level(region_key))
-		region_scar_cache[region_key] = sl
-		return sl
-	
-	var resolve_history_offset_for_region: Callable = func(region_key: int) -> int:
-		if region_history_offset_cache.has(region_key):
-			return int(region_history_offset_cache[region_key])
-		var scar_level: int = int(resolve_region_scar_level.call(region_key))
-		var scar_offset: int = int(scar_priority_for_level.get(scar_level, 0))
-		var to_center: int = SettlementMemory.get_center_region_for_region(region_key)
-		var intent_delta: int = 0
-		if not (from_center_region < 0 and to_center < 0):
-			var to_intent: int = int(MemoryManager.get_settlement_intent().get(to_center, MemoryManager.INTENT_HOLD))
-			var to_pressure: float = float(MemoryManager.get_settlement_pressure().get(to_center, 0.5))
-			if to_intent == MemoryManager.INTENT_GROW:
-				intent_delta += 3
-			elif to_intent == MemoryManager.INTENT_ABANDON:
-				intent_delta -= 4
-			if to_pressure < from_pressure:
-				intent_delta += 1
-			elif to_pressure > from_pressure + 0.12:
-				intent_delta -= 1
-			if from_intent == MemoryManager.INTENT_ABANDON and to_intent != MemoryManager.INTENT_ABANDON:
-				intent_delta += 2
-			elif from_intent != MemoryManager.INTENT_ABANDON and to_intent == MemoryManager.INTENT_ABANDON:
-				intent_delta -= 2
-		var history_offset: int = scar_offset + inherited_history_offset + intent_delta
-		region_history_offset_cache[region_key] = history_offset
-		return history_offset
-
-	var region_tags_cache: Dictionary = {}
-	var resolve_region_tags: Callable = func(region_key: int) -> PackedStringArray:
-		if region_tags_cache.has(region_key):
-			return PackedStringArray(region_tags_cache[region_key])
-		var tags: PackedStringArray = WorldMeaning.get_region_tags(region_key)
-		region_tags_cache[region_key] = tags
-		return tags
-
-	# Simplified priority calculation for performance; affinity is a small nudge â€” not a separate queue pass â€” so build/mining jobs can compete with forage.
-	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
-	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
-	var pawn_cold: bool = data != null and float(data.body_temperature) < 36.5
-	var priority_cb: Callable = func(j: Job) -> int:
-		var base_bias: int = int(ColonySimServices.job_priority_stance_bias(j))
-		# ── URGENCY GATES: survival overrides profession/role preference ──
-		# When a need is critical, non-survival jobs get heavy penalties.
-		# A starving HeelKawnian should NEVER claim a build job.
-		var _is_food_job_type: bool = j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_FISH or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.PLANT_SEEDS
-		var _is_rest_job_type: bool = j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.BUILD_FIRE_PIT
-		if data.hunger <= HUNGER_EMERGENCY:
-			if not _is_food_job_type:
-				return -999  # Don't even consider non-food when starving
-		elif data.hunger <= HUNGER_EAT_THRESHOLD:
-			if not _is_food_job_type:
-				base_bias -= 12  # Heavy penalty for non-food when hungry
-		if data.rest <= REST_PANIC_THRESHOLD:
-			if not _is_rest_job_type and not _is_food_job_type:
-				base_bias -= 10  # Heavy penalty for non-rest when exhausted (but food still wins)
-		# Scale profession bonuses by need satisfaction — a builder at 10% hunger
-		# should care more about eating than building
-		var _need_urgency_scale: float = 1.0
-		if data.hunger <= HUNGER_EAT_THRESHOLD:
-			_need_urgency_scale = clampf(data.hunger / HUNGER_EAT_THRESHOLD, 0.0, 1.0)
-		elif data.rest <= REST_SLEEP_THRESHOLD:
-			_need_urgency_scale = clampf(data.rest / REST_SLEEP_THRESHOLD, 0.0, 1.0)
-		if not is_job_history_critical(j.type):
-			var rk_hist: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-			base_bias += int(resolve_history_offset_for_region.call(rk_hist))
-		if affinity_key != "" and _job_matches_affinity(j.type, affinity_key):
-			base_bias += AFFINITY_JOB_PRIORITY_BONUS
-		# Profession-specific job priority: pawns strongly prefer jobs matching their role
-		# BUT: profession bonus scales down with need urgency. A starving builder
-		# should care more about food than building.
-		if not food_emergency and data.current_profession != HeelKawnianData.Profession.NONE:
-			var prof: int = data.current_profession
-			var prof_bonus: int = 3
-			if _need_urgency_scale < 1.0:
-				prof_bonus = clampi(int(round(float(prof_bonus) * _need_urgency_scale)), 2, 4)
-			match prof:
-				HeelKawnianData.Profession.FARMER:
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS \
-							or j.type == _Job.Type.COOK_MEAT or j.type == _Job.Type.COOK_BERRIES or j.type == _Job.Type.COOK_FISH:
-						base_bias += prof_bonus
-				HeelKawnianData.Profession.BUILDER:
-					if _is_structure_build_job(j.type):
-						var build_skill_bonus: int = 2 + int(data.get_skill_level(HeelKawnianData.Skill.BUILDING) / 5)
-						base_bias += clampi(build_skill_bonus, 2, 6)
-				HeelKawnianData.Profession.GATHERER:
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.GATHER_FLINT or j.type == _Job.Type.GATHER_STICK:
-						base_bias += prof_bonus
-				HeelKawnianData.Profession.WARRIOR:
-					if j.type == _Job.Type.HUNT or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
-						base_bias += prof_bonus
-				HeelKawnianData.Profession.SCHOLAR:
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						base_bias += prof_bonus
-		var action_key: String = _utility_action_for_job(int(j.type))
-		var utility_bias: int = 0
-		if utility_bias_cache.has(action_key):
-			utility_bias = int(utility_bias_cache[action_key])
-		else:
-			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
-			utility_bias_cache[action_key] = utility_bias
-		base_bias += utility_bias
-		base_bias += data.kinship_job_priority_bonus(j.work_tile)
-		base_bias += _goal_priority_bias_for_job(j.type)
-		base_bias += _short_horizon_bias_for_job(j)
-		# PERSONAL LEARNING: confidence from own success/failure history
-		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
-		if personal_conf < 0.3:
-			base_bias -= 3  # Bad personal track record → avoid
-		elif personal_conf > 0.7:
-			base_bias += 2  # Good personal track record → prefer
-		var learning_weight: float = _learning_weight_for_job(j.type)
-		if absf(learning_weight - 1.0) >= 0.01:
-			base_bias += int(round((learning_weight - 1.0) * 4.0))
-		if preferred_idle_action == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
-			base_bias += 2
-		# When fed, nudge build/gather only if the pawn or colony has a real need.
-		if not food_emergency:
-			var local_warmth_press: float = 0.0
-			if ColonySimServices != null and data != null and SettlementMemory != null:
-				var pawn_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
-				var center_rk: int = SettlementMemory.get_center_region_for_region(pawn_rk)
-				if center_rk >= 0:
-					local_warmth_press = ColonySimServices.get_warmth_pressure(center_rk)
-			var warmth_need: float = maxf(crisis_warmth_pressure, local_warmth_press)
-			var colony_needs_build: bool = pawn_cold \
-					or warmth_need > 0.20 \
-					or crisis_housing_pressure > 0.5 \
-					or crisis_cooking_pressure > 0.3
-			if pawn_cold or colony_needs_build:
-				match int(j.type):
-					_Job.Type.MINE, _Job.Type.MINE_WALL, _Job.Type.CHOP:
-						base_bias += 3
-					_Job.Type.BUILD_BED, _Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_STOCKPILE, _Job.Type.BUILD_SHELTER, _Job.Type.BUILD_HEARTH, _Job.Type.BUILD_MARKER_STONE, _Job.Type.BUILD_SHRINE, \
-					_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN, \
-					_Job.Type.BUILD_WORKSHOP, _Job.Type.BUILD_LOOM, _Job.Type.BUILD_KILN, _Job.Type.BUILD_SMELTER, \
-					_Job.Type.BUILD_BOATYARD, _Job.Type.BUILD_DOCK, _Job.Type.BUILD_FISHERMAN_HUT, \
-					_Job.Type.BUILD_APOTHECARY, _Job.Type.BUILD_LIBRARY, _Job.Type.BUILD_SCHOOL, \
-					_Job.Type.BUILD_BARRACKS, _Job.Type.BUILD_WATCHTOWER, \
-					_Job.Type.BUILD_MARKET, _Job.Type.BUILD_TRADING_POST, _Job.Type.BUILD_ROAD, \
-					_Job.Type.BUILD_GRANARY, _Job.Type.BUILD_CELLAR, \
-					_Job.Type.BUILD_BREWERY, _Job.Type.BUILD_TAVERN, \
-					_Job.Type.BUILD_FORD, _Job.Type.BUILD_WATER_MILL:
-						base_bias += 6
-					_Job.Type.BUILD_FIRE_PIT:
-						if pawn_cold or crisis_warmth_pressure > 0.2:
-							base_bias += 6
-					_Job.Type.COOK_MEAT, _Job.Type.COOK_FISH, _Job.Type.COOK_BERRIES:
-						var cook_boost: int = 4
-						if data.is_carrying() and Item.is_food(data.carrying):
-							if data.carrying == _Item.Type.MEAT or data.carrying == _Item.Type.BERRY:
-								if ColonySimServices != null and ColonySimServices.tile_has_hearth_coverage(data.tile_pos):
-									cook_boost += 3
-								else:
-									cook_boost += 1
-						if crisis_cooking_pressure > 0.2 or cook_boost > 4:
-							base_bias += cook_boost
-				if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
-					if warmth_need > 0.25 or crisis_housing_pressure > 0.45:
-						base_bias -= 4
-					elif crisis_food_pressure < 0.15:
-						base_bias -= 2
-					else:
-						base_bias -= 1
-			if crisis_food_pressure < 0.12 and warmth_need > 0.18:
-				match int(j.type):
-					_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_STORAGE_HUT, _Job.Type.BUILD_BED, \
-					_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES:
-						base_bias += 5
-
-		# Crisis priority bonus (snapshot pressures once per claim pass).
-		# Boost BUILD_BED jobs during housing crisis
-		if crisis_housing_pressure > 0.8 and j.type == _Job.Type.BUILD_BED:
-			base_bias += 8
-		# Boost FIRE_PIT when cold or warmth pressure is high (not housing).
-		if j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_HEARTH:
-			if pawn_cold or crisis_warmth_pressure > 0.5:
-				base_bias += 5
-			elif crisis_warmth_pressure > 0.25:
-				base_bias += 2
-		# Boost FORAGE/HUNT/FISH when colony food pressure is elevated
-		if crisis_food_pressure > 0.50 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
-			base_bias += 4
-		var survival_not_met: bool = crisis_food_pressure > 0.55 \
-				or crisis_housing_pressure > 0.70 \
-				or crisis_warmth_pressure > 0.40
-		if survival_not_met:
-			match int(j.type):
-				_Job.Type.PLANT_SEEDS, _Job.Type.GROW_FOOD, _Job.Type.HARVEST_CROPS, \
-				_Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, _Job.Type.BUILD_FARM_VEGETABLES, \
-				_Job.Type.BUILD_HERB_GARDEN:
-					base_bias -= 10
-		elif crisis_food_pressure <= 0.40 and ColonySimServices != null \
-				and ColonySimServices.colony_contentment_period():
-			match int(j.type):
-				_Job.Type.PLANT_SEEDS, _Job.Type.BUILD_FARM_WHEAT, _Job.Type.BUILD_FARM_CORN, \
-				_Job.Type.BUILD_FARM_VEGETABLES, _Job.Type.BUILD_HERB_GARDEN:
-					base_bias += 2
-		if crisis_food_pressure > 0.35 and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
-			base_bias += 3
-		if ColonySimServices != null:
-			var haul_p: float = ColonySimServices.get_haul_pressure()
-			var store_p: float = ColonySimServices.get_storage_pressure()
-			if haul_p > 0.35 or store_p > 0.3:
-				if j.type == _Job.Type.TRADE_HAUL:
-					base_bias += clampi(int(ceil(maxf(haul_p, store_p) * 4.0)), 2, 5)
-			if _world != null and _world.has_method("sum_ground_resources"):
-				var center_rk: int = SettlementMemory.get_center_region_for_region(
-						WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
-				var ground: Dictionary = _world.sum_ground_resources(center_rk)
-				var ground_food: int = int(ground.get("food", 0))
-				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
-					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
-				if ground_food >= 1 and crisis_food_pressure > 0.4 and j.type == _Job.Type.TRADE_HAUL:
-					base_bias += 2
-		# Leader proximity bonus: if the settlement ruler is nearby and this
-		# is a build job, the pawn gets +3 priority (leader directs construction)
-		if _is_structure_build_job(j.type):
-			var my_sid: int = SettlementMemory.get_settlement_id_for_pawn(int(data.id))
-			if my_sid >= 0:
-				var ruler_id: int = SettlementMemory.get_ruler_pawn_id(my_sid)
-				if ruler_id >= 0 and ruler_id != int(data.id):
-					var ruler_data: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(ruler_id)
-					if ruler_data != null:
-						var dist_to_ruler: int = absi(data.tile_pos.x - ruler_data.tile_pos.x) + absi(data.tile_pos.y - ruler_data.tile_pos.y)
-						if dist_to_ruler <= 12:
-							base_bias += 3
-
-		# Neural AI priority bonus from WorldAI matrix (once per job type/tick).
-		var neural_bias: int = 0
-		if neural_bias_cache.has(j.type):
-			neural_bias = int(neural_bias_cache[j.type])
-		else:
-			neural_bias = _get_neural_job_priority_bias(j.type)
-			neural_bias_cache[j.type] = neural_bias
-		base_bias += neural_bias
-		base_bias += _get_heelkawnian_matrix_job_bias(j.type)
-		base_bias = _apply_social_influence_bias(j, base_bias)
-		# World-memory-driven job bias: meaning tags at the job's work tile
-		# shape whether pawns want to work there.
-		var meaning_bias: int = 0
-		var job_rk: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-		var job_tags: PackedStringArray = resolve_region_tags.call(job_rk)
-		for _mt in job_tags:
-			match _mt:
-				"repeated_death", "blood_soaked", "graveyard":
-					meaning_bias -= 2  # avoid death places
-				"cursed":
-					meaning_bias -= 3  # strongly avoid cursed places
-				# Myth formation: ancient danger is feared more
-				"old_death_place":
-					meaning_bias -= 3
-				"ancient_death_place":
-					meaning_bias -= 4
-				"old_famine":
-					meaning_bias -= 2
-				"ancient_famine":
-					meaning_bias -= 3
-				"famine_stricken", "hunger_place":
-					# Hunger memory: food jobs are urgent here, others avoid
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
-						meaning_bias += 2
-					else:
-						meaning_bias -= 1
-				"fire_prone":
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
-						meaning_bias -= 1  # don't build where fire keeps happening
-				"safe_hearth", "fertile":
-					meaning_bias += 1  # prefer working in safe/fertile regions
-				# Myth formation: ancient safety is revered
-				"old_heart":
-					meaning_bias += 2
-				"ancient_heart":
-					meaning_bias += 3
-				"learned", "educated":
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 2  # teach where knowledge already lives
-				# Myth formation: ancient wisdom draws scholars
-				"old_wisdom":
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 3
-				"ancient_wisdom":
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 4
-				"ruined":
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
-						meaning_bias += 1  # rebuild ruined places
-				# Ritual Echo System: custom tags from repeated actions
-				"burial_grove":
-					# Respect burial sites â€” don't build here, but defend them
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
-						meaning_bias -= 2  # violation tension
-					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-						meaning_bias += 2  # guard the sacred dead
-				"faded_burial_grove":
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
-						meaning_bias -= 1  # mild violation tension
-				"teaching_ground":
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 3  # teach where teaching is customary
-				"faded_teaching_ground":
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 1  # faint echo of teaching custom
-				"feast_ground":
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
-						meaning_bias += 2  # food gathering where feasts happen
-				"faded_feast_ground":
-					if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH:
-						meaning_bias += 1
-				"builder_yard":
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
-						meaning_bias += 2  # build where building is customary
-				"faded_builder_yard":
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL:
-						meaning_bias += 1
-				"gathering_place":
-					meaning_bias += 1  # generally prefer working where people gather
-					if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP:
-						meaning_bias += 1  # knowledge exchange at crossroads
-				"faded_gathering_place":
-					meaning_bias += 1  # faint echo of community
-				# New meaning pipeline tags: craft, authority, trade, conflict, legacy, culture
-				"craftsman_quarter":
-					meaning_bias += 2  # work where craft lives
-					if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR:
-						meaning_bias += 2  # build in craft district
-				"industrial":
-					meaning_bias += 1  # mild work preference
-				"forge_echo":
-					meaning_bias += 2  # work where forging is customary
-				"faded_forge_echo":
-					meaning_bias += 1
-				"governed":
-					meaning_bias += 1  # stability attracts work
-				"seat_of_power":
-					meaning_bias += 2  # authority center
-					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-						meaning_bias += 2  # defend the seat of power
-				"trading_post":
-					meaning_bias += 1  # trade attracts foragers
-					if j.type == _Job.Type.FORAGE:
-						meaning_bias += 2
-				"merchant_quarter":
-					meaning_bias += 2  # strong trade center
-				"market_echo":
-					meaning_bias += 1  # faint market memory
-				"faded_market_echo":
-					meaning_bias += 1
-				"war_torn":
-					meaning_bias -= 3  # avoid war zones
-					if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-						meaning_bias += 3  # but warriors go where war is
-				"grudge_haunted":
-					meaning_bias -= 1  # mild unease
-				"war_echo":
-					meaning_bias -= 2  # residual danger
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 2
-				"faded_war_echo":
-					meaning_bias -= 1
-				"dangerous_ground":
-					meaning_bias -= 2  # avoid injury places
-				"blood_stained":
-					meaning_bias -= 1
-				"storied":
-					meaning_bias += 1  # history attracts
-				"ancient_lineage":
-					meaning_bias += 2  # deep history
-				"sacred":
-					meaning_bias += 1  # sacred places attract
-					if j.type == _Job.Type.TEACH_SKILL:
-						meaning_bias += 2  # teach at sacred sites
-				"hallowed":
-					meaning_bias += 2  # deeply sacred
-				"sanctuary_echo":
-					meaning_bias += 2  # active sanctuary
-				"faded_sanctuary_echo":
-					meaning_bias += 1
-				# Myth-amplified tags
-				"old_forge":
-					meaning_bias += 1  # historic workshop
-				"ancient_forge":
-					meaning_bias += 2  # legendary workshop
-				"old_throne":
-					meaning_bias += 1  # former power
-				"ancient_throne":
-					meaning_bias += 2  # mythic power
-				"old_battleground":
-					meaning_bias -= 2
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 2
-				"ancient_battleground":
-					meaning_bias -= 3
-					if j.type == _Job.Type.DEFEND:
-						meaning_bias += 3
-				"old_sanctuary":
-					meaning_bias += 1
-				"ancient_sanctuary":
-					meaning_bias += 2
-				"old_market":
-					meaning_bias += 1
-				"ancient_market":
-					meaning_bias += 2
-				"world_touched":
-					meaning_bias += 1  # world events leave marks
-		base_bias += meaning_bias
-		# Player zone designation bias: jobs in designated zones get priority
-		var zone_bias: int = 0
-		var job_tile: Vector2i = j.work_tile
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.FORAGE):
-			if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.FISH:
-				zone_bias += 6
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD):
-			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
-				zone_bias += 6
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
-			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
-				zone_bias += 6
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY):
-			# Territory zones: pawns prefer building and working inside their own territory
-			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
-				zone_bias += 4
-		base_bias += zone_bias
-		# Materials: HeelKawnians build when they have materials and gather when they don't.
-		# No hard penalty — the natural job priority system handles the balance.
-		# Settlement proximity bias: pawns strongly prefer jobs in their own settlement.
-		# This keeps each settlement's workforce working locally instead of all pawns
-		# clustering at the central stockpile and ignoring outlying settlements.
-		var my_sid: int = SettlementMemory.get_settlement_id_for_region(from_region_key)
-		if my_sid >= 0:
-			var job_sid: int = SettlementMemory.get_settlement_id_for_region(job_rk)
-			if job_sid >= 0 and job_sid == my_sid:
-				base_bias += 5  # work for own settlement
-			elif job_sid >= 0 and job_sid != my_sid:
-				base_bias -= 3  # avoid working for other settlements
-		# ── BIG FIVE PERSONALITY: emergent behavior from stable traits ──
-		# Slot 0: Openness → prefer novel/exploratory jobs
-		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH or j.type == _Job.Type.TRADE_HAUL:
-			base_bias += int(round((_bp(0) - 0.5) * 8.0))
-		# Slot 1: Conscientiousness → prefer structured/building jobs
-		if _is_structure_build_job(j.type):
-			base_bias += int(round((_bp(1) - 0.5) * 10.0))
-		# Slot 2: Extraversion → prefer social jobs, introverts prefer solo work
-		if j.type == _Job.Type.TEACH_SKILL or j.type == _Job.Type.APPRENTICESHIP or j.type == _Job.Type.PROTECT or j.type == _Job.Type.DEFEND:
-			base_bias += int(round((_bp(2) - 0.5) * 6.0))
-		if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT:
-			base_bias += int(round((_bp(2) - 0.5) * -4.0))
-		# Slot 3: Agreeableness → follow orders, prefer cooperative jobs
-		if j.issuer_pawn_id >= 0:
-			base_bias += int(round((_bp(3) - 0.5) * 5.0))
-		# Slot 4: Neuroticism → avoid danger zones
-		var job_scar: int = int(resolve_region_scar_level.call(job_rk))
-		if job_scar >= 2:
-			base_bias += int(round((_bp(4) - 0.5) * -12.0))
-		# Slot 6: Risk tolerance → prefer high-risk/high-reward jobs
-		if j.type == _Job.Type.HUNT or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
-			base_bias += int(round((_bp(6) - 0.5) * 8.0))
-		# Slot 7: Tradition → prefer socially customary jobs
-		if j.social_weight > 0.01:
-			base_bias += int(round((_bp(7) - 0.5) * 4.0))
-		# Slot 5: Personal whim (legacy)
-		base_bias += clampi(int(floor((_bp(5) - 0.5) * 6.0)), -2, 2)
-
-		# Keep bias math cheap and deterministic on hot claim path.
-		if FactionManager != null and FactionManager.has_method("apply_authority_bonus"):
-			return FactionManager.apply_authority_bonus(base_bias, int(data.id))
-		return base_bias
-	var base_passes: Callable = func(j: Job) -> bool:
-		if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
-			return false
-		# Skip jobs on this pawn's claim cooldown (prevents tile_invalid re-claim loops)
-		if _job_claim_cooldowns.has(int(j.id)):
-			var cooldown_until: int = int(_job_claim_cooldowns[int(j.id)])
-			var cur_tick: int = GameManager.tick_count if GameManager != null else 0
-			if cooldown_until > cur_tick:
-				return false
-			else:
-				_job_claim_cooldowns.erase(int(j.id))
-		if not data.allows_job_type(j.type):
-			return false
-
-		# TOOL REQUIREMENT CHECK - lenient: pawns can work without tools, just slower
-		# Only block if pawn TRULY can't do the job (e.g., no hands, incapacitated)
-		# Removed hard block - pawns will work with bare hands if needed
-
-		var rk_filter: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
-		if not is_job_history_critical(j.type):
-			if int(resolve_region_scar_level.call(rk_filter)) >= 3:
-				return false
-		if int(resolve_component_for_work_tile.call(j.work_tile)) != my_component:
-			return false
-		var mats: Dictionary = _materials_for_active_build(j)
-		if not mats.is_empty():
-			# If no stockpiles exist, allow claiming build jobs so pawns can
-			# gather materials from the environment first, then build.
-			# This breaks the startup deadlock completely.
-			if StockpileManager._zones.is_empty():
-				pass  # Allow claim - pawn will gather materials from environment
-			else:
-				# Any zone with the material is fine -- the pawn will walk to
-				# the closest one in _begin_fetching_material.
-				if StockpileManager.total_count_of(mats.item) < mats.qty:
-					return false
-		# === CHECK TECH REQUIREMENT ===
-		# Allow primitive survival jobs to bypass tech requirements
-		# so early-game pawns can build basic shelters without research
-		var is_primitive_job: bool = j.type in [
-			_Job.Type.BUILD_FIRE_PIT, _Job.Type.BUILD_BED, _Job.Type.BUILD_SHELTER,
-			_Job.Type.BUILD_WALL, _Job.Type.BUILD_DOOR, _Job.Type.BUILD_HEARTH,
-			_Job.Type.BUILD_STOCKPILE, _Job.Type.FORAGE, _Job.Type.HUNT, _Job.Type.FISH,
-			_Job.Type.COOK_MEAT, _Job.Type.COOK_BERRIES, _Job.Type.COOK_FISH,
-			_Job.Type.CHOP, _Job.Type.MINE, _Job.Type.GATHER_FLINT, _Job.Type.GATHER_STICK
-		]
-		if TechnologySystem != null and not is_primitive_job:
-			var settle_center: int = int(from_center_region)
-			if settle_center >= 0:
-				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
-					return false
-		# === END TECH CHECK ===
-		return true
-	# MATRIX DECISION: after base_passes exists so matrix claims respect materials/tech/path.
-	if OS.is_debug_build() and TickProfiler != null:
-		TickProfiler.record_idle("job_scoring", Time.get_ticks_usec() - _t_idle_sub)
-		_t_idle_sub = Time.get_ticks_usec()
-	if _maybe_matrix_decide_job(priority_cb, base_passes):
+	# Pipeline phases 1-3 handle job scan above via _has_pending_idle_decision().
+	# This block only runs on non-pipeline ticks (cheap wander or profiler finalize).
+	if _has_pending_idle_decision():
+		# Pipeline is mid-execution; social/awareness already returned or fell through.
+		# Cheap wander only.
+		var _pd_cw3_t0: int = _pd_begin()
+		var skip_wander_chance3: float = WANDER_CHANCE_PER_TICK
+		if preferred_idle_action == "wander":
+			skip_wander_chance3 *= 1.6
+		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance3, 0.0, 0.35), _pawn_salt(12)):
+			_start_wander()
+		_pd_accum("idle/cheap_wander", _pd_cw3_t0)
+		if TickProfiler != null and TickProfiler.is_enabled():
+			TickProfiler.record_idle("wander", Time.get_ticks_usec() - _t_idle_sub)
+			TickProfiler.record_state("IDLE", Time.get_ticks_usec() - _t_idle_start)
 		return
-	if food_emergency:
-		# Either harvest type fills the pantry; let pawns pick whichever is
-		# nearest by deferring to JobManager's distance tiebreak. `base_passes`
-		# already enforces per-pawn work toggles (work_forage / work_hunt).
-		var food_only: Callable = func(j: Job) -> bool:
-			if HeelKawnian._world_hunt_stabilization_blocks() and j.type == _Job.Type.HUNT:
-				return false
-			if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH:
-				return false
-			return base_passes.call(j)
-		var food_job: Job = JobManager.claim_next_for(self, food_only, priority_cb)
-		if food_job != null:
-			_begin_job(food_job)
-			return
-	# GOAL-DIRECTED FILTERING: When a goal has high priority (> 0.7),
-	# restrict job claiming to only goal-relevant jobs. Goals become plans,
-	# not just nudges. A HeelKawnian with "find_food" goal at priority 2.0
-	# should ONLY consider food jobs, not build or mine.
-	var goal_type: String = str((_decision._cached_active_goal if _decision != null else _cached_active_goal).get("type", ""))
-	var goal_priority: float = _decision._cached_active_goal_priority if _decision != null else _cached_active_goal_priority
-	var goal_filter: Callable = base_passes  # Default: no filtering
-	if goal_priority > 0.7 and not goal_type.is_empty():
-		match goal_type:
-			"find_food":
-				goal_filter = func(j: Job) -> bool:
-					if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH and j.type != _Job.Type.COOK_MEAT and j.type != _Job.Type.COOK_FISH and j.type != _Job.Type.COOK_BERRIES and j.type != _Job.Type.PLANT_SEEDS and j.type != _Job.Type.HARVEST_CROPS:
-						return false
-					return base_passes.call(j)
-			"find_rest":
-				goal_filter = func(j: Job) -> bool:
-					if j.type != _Job.Type.BUILD_BED and j.type != _Job.Type.BUILD_SHELTER and j.type != _Job.Type.BUILD_HEARTH and j.type != _Job.Type.BUILD_FIRE_PIT:
-						return false
-					return base_passes.call(j)
-			"improve_safety":
-				goal_filter = func(j: Job) -> bool:
-					if j.type != _Job.Type.BUILD_WALL and j.type != _Job.Type.BUILD_DOOR and j.type != _Job.Type.BUILD_WATCHTOWER and j.type != _Job.Type.BUILD_BARRACKS and j.type != _Job.Type.PROTECT and j.type != _Job.Type.DEFEND:
-						return false
-					return base_passes.call(j)
-			"build_reputation", "seek_leadership":
-				goal_filter = func(j: Job) -> bool:
-					if j.type != _Job.Type.TEACH_SKILL and j.type != _Job.Type.APPRENTICESHIP and j.type != _Job.Type.BUILD_MARKER_STONE:
-						return false
-					return base_passes.call(j)
-			"leave_legacy":
-				goal_filter = func(j: Job) -> bool:
-					if j.type != _Job.Type.CARVE_LEDGER_STONE and j.type != _Job.Type.CARVE_KNOWLEDGE_STONE and j.type != _Job.Type.CARVE_GRAVE_MARKER:
-						return false
-					return base_passes.call(j)
-	# PROFESSION PRIORITY: Builders prioritize build jobs, Warriors prioritize hunt/combat
-	var profession_bonus: Callable = _get_profession_priority_bonus
-	var _rjp_world = _world
-	var _rjp_cs = ColonySimServices if ColonySimServices != null else null
-	var reactive_bonus: Callable = func(j: Job) -> int:
-		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
-	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus), reactive_bonus))
-	if job != null:
-		_begin_job(job)
-		# If we got a job through goal filtering, we're on plan. If not, fall through
-		# to an unfiltered claim on the next tick (goal filter only applies when
-		# the goal is high priority, so missing one tick is fine).
-		return
-	# GOAL FALLBACK: If goal-directed filtering found nothing, try unfiltered.
-	# Goals are plans, not death sentences. A hungry pawn with no food jobs
-	# should still chop wood or build — not wander forever waiting for food.
-	var profession_bonus2: Callable = _get_profession_priority_bonus
-	var _rjp_world2 = _world
-	var _rjp_cs2 = ColonySimServices if ColonySimServices != null else null
-	var reactive_bonus2: Callable = func(j: Job) -> int:
-		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world2, _rjp_cs2))
-	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus2), reactive_bonus2))
-	if job2 != null:
-		_begin_job(job2)
-
-		# LOG COMMUNICATION: Announce work to nearby pawns
-		if data != null and PawnCommunicationLog != null:
-			PawnCommunicationLog.log_work_announcement(
-				int(data.id),
-				data.display_name,
-				job2.type,
-				job2.work_tile,
-				"Priority: %d" % job2.priority
-			)
-
-		# SHOW CHATTER BUBBLE: Visible speech bubble above pawn
-		if data != null and PawnChatterBubbles != null:
-			PawnChatterBubbles.show_work_bubble(int(data.id), self, job2.type)
-
-		return
-	# Claim diagnostics (F10 idle / ignore-jobs audit).
-	if OS.is_debug_build() and TickProfiler != null:
-		TickProfiler.record_idle("job_claim", Time.get_ticks_usec() - _t_idle_sub)
-		_t_idle_sub = Time.get_ticks_usec()
-	var visible_candidates: Array = []
-	if JobManager != null and JobManager.has_method("visible_jobs_for_pawn"):
-		visible_candidates = JobManager.visible_jobs_for_pawn(self, data)
-	data.visible_orders_count = visible_candidates.size()
-	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
-		data.obey_score = WorldAI.get_pawn_obedience_weight(int(data.id))
-	data.last_claim_failure_reason = _audit_claim_failure_reason(visible_candidates)
-	# 7. Nothing to do: idle wander
-	var wanderlust2: float = lerpf(0.52, 1.68, _bp(3))
-	var wander_score: float = _utility_score_normalized("wander", utility_context)
-	var wander_chance: float = WANDER_CHANCE_PER_TICK * wanderlust2 * (1.0 + maxf(0.0, wander_score - UTILITY_WANDER_THRESHOLD))
+	# No pending decision, no job-scan needed — cheap wander fallback.
+	var _pd_cw4_t0: int = _pd_begin()
+	var skip_wander_chance4: float = WANDER_CHANCE_PER_TICK
 	if preferred_idle_action == "wander":
-		wander_chance *= 1.6
-	if ColonySimServices != null and ColonySimServices.get_food_pressure() < 0.22:
-		wander_chance *= 2.2
-	if data != null and data.mood >= 55.0:
-		wander_chance *= 1.35
-	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(wander_chance, 0.0, 0.42), _pawn_salt(11)):
+		skip_wander_chance4 *= 1.6
+	if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance4, 0.0, 0.35), _pawn_salt(12)):
 		_start_wander()
-	if OS.is_debug_build() and TickProfiler != null:
+	_pd_accum("idle/cheap_wander", _pd_cw4_t0)
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_idle("wander", Time.get_ticks_usec() - _t_idle_sub)
 		TickProfiler.record_state("IDLE", Time.get_ticks_usec() - _t_idle_start)
 
@@ -5841,7 +6691,7 @@ func _tick_walking() -> void:
 
 
 func _tick_working() -> void:
-	var _t_work_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _t_work_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
 	var _t_work_sub: int = _t_work_start
 	var work_step_interval: int = _work_step_interval_for_speed()
 	var tick_now: int = GameManager.tick_count if GameManager != null else 0
@@ -5886,7 +6736,7 @@ func _tick_working() -> void:
 		_reset_to_idle()
 		return
 	
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_work("validation", Time.get_ticks_usec() - _t_work_sub)
 		_t_work_sub = Time.get_ticks_usec()
 	# Stage 1: Calculate work efficiency based on proficiency, stamina, pain, injuries
@@ -5896,7 +6746,7 @@ func _tick_working() -> void:
 	# Always at least 1 progress per tick (a fresh pawn isn't slower than the
 	# old constant-rate baseline). XP accrues only while actually working.
 	var skill: int = HeelKawnianData.skill_for_job(_current_job.type)
-	var speed: float = data.effective_labor_mult() * float(work_step_multiplier)
+	var speed: float = data.effective_labor_mult()
 	speed *= _work_rate_band_for_job(_current_job.type)
 	# Tool efficacy is applied inside _calculate_work_efficiency() â€” don't double-count.
 	speed *= data.kinship_work_speed_multiplier(_current_job.work_tile)
@@ -5905,14 +6755,26 @@ func _tick_working() -> void:
 			speed *= 0.72
 			if posmod(tick_now + int(data.id), 18) == 0:
 				data.mood = maxf(0.0, data.mood - 0.35)
+	# Multi-rate: how many 0.05s work-ticks this sim window represents. Whole
+	# progress ticks scale with simulated elapsed time, so high speeds genuinely
+	# accelerate jobs without more/faster calls or microtick loops. Fractional
+	# Work progress advances with simulated elapsed time:
+	# _last_sim_dt_seconds / 0.05 where 0.05 is the compat-tick duration.
+	# At 1x this equals 1 old work tick per compat tick; at higher speeds
+	# it scales proportionally with world time, matching survival decay.
+	var virtual_work_ticks: float = _last_sim_dt_seconds / 0.05
 	if skill >= 0:
 		speed *= data.work_speed_for(skill)
 		# Apply efficiency modifier
 		speed *= efficiency
+		var prog_units: float = speed * virtual_work_ticks + _work_progress_fraction
+		var w: int = int(floor(prog_units))
+		_work_progress_fraction = prog_units - float(w)
+		if w <= 0:
+			return
 		var leveled_up: bool = data.add_skill_xp(
-				skill, HeelKawnianData.XP_PER_WORK_TICK * float(work_step_multiplier)
+				skill, HeelKawnianData.XP_PER_WORK_TICK * float(w)
 		)
-		var w: int = maxi(1, int(ceil(speed)))
 		data.add_profession_liking_for_job(_current_job.type, w)
 		# Record job tick for likes/dislikes and profession assignment
 		var job_cat: String = HeelKawnianData.job_category_for_type(_current_job.type)
@@ -5944,7 +6806,7 @@ func _tick_working() -> void:
 					"tick": GameManager.tick_count,
 				})
 		_current_job.work_ticks_done += w
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_work("progress", Time.get_ticks_usec() - _t_work_sub)
 		_t_work_sub = Time.get_ticks_usec()
 	if _current_job.work_ticks_done >= _current_job.work_ticks_needed:
@@ -5954,7 +6816,7 @@ func _tick_working() -> void:
 			_complete_current_job()
 	# Mining and wall-mining are hazardous. Small chance of injury each tick.
 	_apply_work_hazards(work_step_multiplier)
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_work("misc", Time.get_ticks_usec() - _t_work_sub)
 		TickProfiler.record_state("WORKING", Time.get_ticks_usec() - _t_work_start)
 
@@ -6066,13 +6928,21 @@ func _apply_tradition_mood_for_job(job_type: int) -> void:
 
 
 func _tick_eating() -> void:
-	_eat_ticks_left -= 1
+	# Multi-rate: decrement by virtual tick equivalents using sim_dt scale
+	var need: float = 1.0 * _last_sim_scale + _compat_frac
+	var whole: int = int(floor(need))
+	_compat_frac = need - whole
+	_eat_ticks_left = maxi(0, _eat_ticks_left - whole)
 	if _eat_ticks_left <= 0:
 		_finish_eating()
 
 
 func _tick_teaching() -> void:
-	_teaching_ticks_left -= 1
+	# Multi-rate: decrement by virtual tick equivalents using sim_dt scale
+	var need: float = 1.0 * _last_sim_scale + _compat_frac
+	var whole: int = int(floor(need))
+	_compat_frac = need - whole
+	_teaching_ticks_left = maxi(0, _teaching_ticks_left - whole)
 	
 	# Check if target is still valid and nearby
 	if _teaching_target == null or not is_instance_valid(_teaching_target):
@@ -6163,7 +7033,11 @@ func _try_complete_knowledge_teaching() -> bool:
 
 
 func _tick_challenge() -> void:
-	_challenge_ticks_left -= 1
+	# Multi-rate: decrement by virtual tick equivalents using sim_dt scale
+	var need: float = 1.0 * _last_sim_scale + _compat_frac
+	var whole: int = int(floor(need))
+	_compat_frac = need - whole
+	_challenge_ticks_left = maxi(0, _challenge_ticks_left - whole)
 	
 	# Check if target is still valid and nearby
 	if _challenge_target == null or not is_instance_valid(_challenge_target):
@@ -6282,6 +7156,8 @@ func _apply_work_hazards(work_ticks_simulated: int = 1) -> void:
 # ==================== jobs (FORAGE / MINE) ====================
 
 func _begin_job(job: Job) -> void:
+	if _pd_active:
+		_pd_job_counters["claim_successes"] = int(_pd_job_counters.get("claim_successes", 0)) + 1
 	_current_job = job
 	_job_walk_path_fails = 0
 	HeelKawnianManager.note_matrix_job_choice(self, job)
@@ -8590,65 +9466,21 @@ func _eat_from_hand() -> void:
 
 # ==================== needs ====================
 
-func _decay_needs() -> void:
-	# Sleeping pawns metabolize slower and recover rest instead of losing it.
-	# A bed that the pawn has reserved AND is currently standing on grants a
-	# faster recovery rate -- the payoff for hauling wood and building.
-	# Everything else (mood, etc.) decays normally so a 24-hour nap still
-	# erodes happiness.
-	
-	# Get trait multipliers
-	var hunger_mult: float = data.get_trait_mult("hunger_decay_mult")
-	var rest_mult: float = data.get_trait_mult("rest_decay_mult")
-	var mood_mult: float = data.get_trait_mult("mood_decay_mult")
-	
-	var pace_h: float = lerpf(0.86, 1.15, _bp(0))
-	var pace_r: float = lerpf(0.86, 1.15, _bp(1))
-	var harmful_scale: float = _harmful_pressure_scale()
-	if _state == State.SLEEPING:
-		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK_SLEEPING * hunger_mult * pace_h * harmful_scale
-		var rate: float = REST_RECOVER_PER_TICK_SLEEP
-		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
-			rate *= REST_RECOVER_BED_MULTIPLIER
-		data.rest = min(100.0, data.rest + rate)
-		# Health recovery while sleeping â€” injuries heal during rest
-		var heal_rate: float = HEALTH_RECOVER_PER_TICK_SLEEP
-		if _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed and _world != null and _world.is_bed_owned_by(_reserved_bed, self):
-			heal_rate *= HEALTH_RECOVER_BED_MULTIPLIER
-		if data.health < data.max_health:
-			data.health = min(data.max_health, data.health + heal_rate)
-	else:
-		# Activity-based decay: walking/working/hauling cost more than standing idle.
-		# This makes pawns need to eat regularly — they can't just forage once and sit.
-		var hunger_act: float = 1.0
-		var rest_act: float = 1.0
-		match _state:
-			State.WALKING_TO_JOB, State.GOING_TO_EAT, State.GOING_TO_BED, State.FETCHING_MATERIAL, State.DRAFT_WALK, State.PILGRIMAGE, State.FLEEING, State.DIRECT_FORAGING, State.GOING_TO_DRINK, State.MOUNTING, State.RIDING, State.DISEMBARKING, State.GOING_TO_BOAT, State.SAILING, State.DISEMBARKING_BOAT:
-				hunger_act = HUNGER_ACTIVITY_WALK
-				rest_act = REST_ACTIVITY_WALK
-			State.WORKING, State.TEACHING, State.CHALLENGE, State.CRAFTING, State.GATHERING:
-				hunger_act = HUNGER_ACTIVITY_WORK
-				rest_act = REST_ACTIVITY_WORK
-			State.HAULING:
-				hunger_act = HUNGER_ACTIVITY_HAUL
-				rest_act = REST_ACTIVITY_HAUL
-		data.hunger = data.hunger - HUNGER_DECAY_PER_TICK * hunger_act * hunger_mult * pace_h * harmful_scale
-		data.rest   = data.rest   - REST_DECAY_PER_TICK * rest_act * rest_mult * pace_r * harmful_scale
-	
-	# Mood: net loss when needs aren't met, net gain when they are.
-	# Passive contentment outpaces decay, so a pawn whose hunger AND rest are
-	# both comfortable will recover happiness on their own.
-	# Mood events also contribute their own delta - throttled to every 10 ticks
+## Discrete cadence-throttled survival systems.
+## Called on the legacy 5-tick stagger (or via apply_body_needs).
+## Does NOT apply continuous rates (hunger/rest/health/aging/stamina/mood_drift/intoxication)
+## which are now handled by the pawn time lane in _apply_pawn_time_lane().
+func _decay_needs_discrete() -> void:
+	if data == null:
+		return
+	# Mood events processing (throttled to every 10 compat ticks)
 	var mood_event_impact: float = 0.0
 	if GameManager.tick_count % 10 == 0:
 		data.process_mood_events()
 		mood_event_impact = data.get_mood_event_impact()
-	
-	if data.hunger >= MOOD_CONTENT_FLOOR and data.rest >= MOOD_CONTENT_FLOOR:
-		data.mood = clampf(data.mood + MOOD_GAIN_PER_TICK_CONTENT - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
-	else:
-		data.mood = clampf(data.mood - MOOD_DECAY_PER_TICK * mood_mult + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
-	# Occasional uplift â€” same world rules, but some people notice small good moments more often.
+	# Mood continuous drift is now in pawn time lane; only event impact here
+	data.mood = clampf(data.mood + mood_event_impact + data.kinship_mood_bonus(), 0.0, 100.0)
+	# Occasional uplift — same world rules, but some people notice small good moments more often.
 	if posmod(GameManager.tick_count + int(data.id) * 5, 211) == 0:
 		var flutter: float = 0.1 + _bp(4) * 0.22
 		if WorldRNG.chance_for(StringName("pawn_natural_mood:%d" % int(data.id)), flutter, GameManager.tick_count / 200):
@@ -8666,68 +9498,50 @@ func _decay_needs() -> void:
 		if stress_drain > 0.0:
 			data.mood = max(0.0, data.mood - stress_drain)
 	
-	# Stage 1: Decay stamina based on activity - throttled to every 5 ticks
-	if GameManager.tick_count % 5 == 0:
-		_decay_stamina()
+	# Stamina is now continuous in pawn time lane; skip the discrete throttle
 	
-	# Stage 1: Check temperature exposure - throttled to every 10 ticks
+	# Check temperature exposure - throttled to every 10 ticks
 	if GameManager.tick_count % 10 == 0:
 		_check_temperature()
 	# Night exposure away from hearth: mood + rare predator pressure (minimal night danger).
 	if GameManager.tick_count % 20 == int(data.id) % 20:
 		_apply_night_exposure_effects()
 	
-	# Stage 1: Process injuries and pain - throttled to every 5 ticks
+	# Process injuries and pain - throttled to every 5 ticks
 	if GameManager.tick_count % 5 == 0:
 		_process_injuries()
 	
-	# Stage 1: Observe nearby work (learning by observation) - DISABLED for performance
+	# Observe nearby work (learning by observation) - DISABLED for performance
 	# _observe_nearby_work()
 	
-	# Stage 1: Update perception and location memory - throttled to every 20 ticks
+	# Update perception and location memory - throttled to every 20 ticks
 	if posmod(GameManager.tick_count + int(data.id), 20) == 0:
 		_update_perception()
-
-	# PERFORMANCE: Tick rate decoupling for social AI (every 5 ticks instead of every tick)
+	
+	# Tick rate decoupling for social AI (every 5 ticks instead of every tick)
 	if _tick_rate_decoupler != null and _tick_rate_decoupler.should_update("Social"):
-		# Stage 2: Co-presence using SpatialGrid for O(1) neighbor queries
+		# Co-presence using SpatialGrid for O(1) neighbor queries
 		if _spatial_grid != null:
 			_track_co_presence_spatial()
 		else:
 			# Fallback to old method if SpatialGrid not available
 			if posmod(GameManager.tick_count + int(data.id) * 3, 37) == 0:
 				_track_co_presence_light()
-
-	# Stage 3: Seed myth knowledge from current region's myth state (every ~200 ticks)
+	
+	# Seed myth knowledge from current region's myth state (every ~200 ticks)
 	if posmod(GameManager.tick_count + int(data.id) * 7, 200) == 0:
 		_maybe_seed_myth_from_region()
-
-	# Stage 1: Decay unused skills (throttled to once per day)
+	
+	# Decay unused skills (throttled to once per day)
 	if GameManager.tick_count % DayNightCycle.TICKS_PER_DAY == 0:
 		data.decay_unused_skills()
-	
-	# Stage 3-4: Track clan/settlement contributions - DISABLED for performance
-	# if _state == State.WORKING and _current_job != null:
-	# 	var job_type_str: String = Job.describe_type(_current_job.type).to_lower()
-	# 	contribute_to_clan_labor(job_type_str)
-	# 	if data.settlement_id != -1:
-	# 		if _current_job.type == _Job.Type.FORAGE or _current_job.type == _Job.Type.HUNT:
-	# 			record_food_production(1)
-	# 		elif _current_job.type == _Job.Type.BUILD_BED or _current_job.type == _Job.Type.BUILD_WALL or _current_job.type == _Job.Type.BUILD_DOOR:
-	# 			record_building_construction()
 	
 	# Crisis behavior: very low mood causes pawns to refuse work (strike)
 	var crisis_level: float = data.get_crisis_level()
 	if crisis_level > 0.8 and WorldRNG.chance_for(_pawn_stream("crisis_strike"), 0.05, _pawn_salt(41)):
 		_trigger_crisis_strike()
 	
-	# One in-world year every SimTime.TICKS_PER_SIM_YEAR ticks (see docs/TIME_SCALE.md).
-	data.age_years += 1.0 / float(SimTime.TICKS_PER_SIM_YEAR)
-	if data.age_years > 70.0 and WorldRNG.chance_for(_pawn_stream("old_age"), 0.00001, _pawn_salt(43)):
-		_die("old_age")
-		return
-	# Death from starvation, exhaustion, or injury
-	_check_death_conditions()
+	# Aging, old age death, and death conditions are now in pawn time lane (_apply_pawn_time_lane)
 
 
 func _publish_player_body_needs_to_hud_if_incarnated() -> void:
@@ -10537,8 +11351,11 @@ func _tick_crafting() -> void:
 			still_active = true
 			break
 	if still_active:
-		var interval: int = _work_step_interval_for_speed()
-		_crafting_ticks_left = maxi(0, _crafting_ticks_left - interval)
+		# Multi-rate: decrement by virtual tick equivalents using sim_dt scale
+		var need: float = 1.0 * _last_sim_scale + _compat_frac
+		var whole: int = int(floor(need))
+		_compat_frac = need - whole
+		_crafting_ticks_left = maxi(0, _crafting_ticks_left - whole)
 		return
 	_crafting_job_id = -1
 	_crafting_ticks_left = 0
@@ -11068,7 +11885,7 @@ func _draw_procedural_pixel_figure(origin: Vector2, body_radius: float) -> void:
 
 
 func _draw() -> void:
-	var _draw_start: int = Time.get_ticks_usec() if OS.is_debug_build() else 0
+	var _draw_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
 	if data == null:
 		return
 	var body_radius: float = _body_radius()
@@ -11297,7 +12114,7 @@ func _draw() -> void:
 
 	if is_selected and data != null:
 		_draw_social_bonds(body_origin)
-	if OS.is_debug_build() and TickProfiler != null:
+	if TickProfiler != null and TickProfiler.is_enabled():
 		TickProfiler.record_pawn_draw(Time.get_ticks_usec() - _draw_start)
 
 

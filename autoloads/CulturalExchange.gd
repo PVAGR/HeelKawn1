@@ -442,15 +442,25 @@ func get_trait_value(center: int, trait_key: String) -> String:
 	var profile: Dictionary = get_cultural_profile(center)
 	return str(profile.get(trait_key, ""))
 
-func set_trait(center: int, trait_key: String, value: String, tick: int) -> void:
+func set_trait(center: int, trait_key: String, value: Variant, tick: int) -> void:
 	if not (trait_key in TRAIT_KEYS):
 		return
 	var sm := get_node_or_null("/root/SettlementMemory")
 	var traits: Dictionary = _load_or_init_traits(center, sm, tick)
 	var old_val: String = str(traits.get(trait_key, ""))
-	if old_val == value:
+	if old_val == str(value):
 		return
-	traits[trait_key] = value
+	if trait_key == "taboo_jobs":
+		var normalized: Variant
+		if value is Array:
+			normalized = value
+		elif value is String:
+			normalized = [value]
+		else:
+			normalized = []
+		traits[trait_key] = normalized
+	else:
+		traits[trait_key] = str(value)
 	_settlement_cultures[center] = traits
 	if sm != null:
 		_save_traits_to_settlement(sm, center, traits)

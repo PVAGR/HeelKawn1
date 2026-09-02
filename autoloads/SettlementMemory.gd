@@ -492,6 +492,12 @@ func recompute(_world: World, budget_usec: int = -1) -> void:
 			return false
 		return pa[0] < pb[0]
 	)
+	# CORRECTNESS: the formalization gate must run on EVERY recompute regardless
+	# of budget. The budget early-return below existed to skip secondary work at
+	# high speeds, but it used to sit ABOVE the gate, so at 200x the gate never
+	# evaluated: every proto kept guild_candidate_reason="not_evaluated", formal
+	# settlements were re-cleared on each rebuild, and nothing ever formalized.
+	_apply_guild_settlement_gate(_world)
 	if budget_usec >= 0 and Time.get_ticks_usec() - _recomp_start >= budget_usec:
 		return
 	merge_small_settlements()
@@ -500,7 +506,6 @@ func recompute(_world: World, budget_usec: int = -1) -> void:
 	_apply_persisted_governance_forms()
 	_compute_dominant_clans()
 	count_pawns_per_settlement()
-	_apply_guild_settlement_gate(_world)
 	_resolve_settlement_names()
 	_apply_polity_identity()
 	_chronicle_polity_events()
@@ -811,7 +816,6 @@ func _apply_guild_settlement_gate(world: World) -> void:
 		var guild_pawns: Array = _pawns_in_settlement_indexed(st)
 		if guild_pawns.size() < MIN_GUILD_SIZE_FOR_SETTLEMENT:
 			guild_pawns = _guild_pawns_near_center(center_tile, guild_pawns)
-		var was_formal: bool = bool(st.get("is_formal_settlement", false))
 		var gate: Dictionary = describe_formal_settlement_gate(center_tile, guild_pawns, world)
 		var allowed: bool = bool(gate.get("allowed", false))
 		if not allowed:
@@ -831,7 +835,7 @@ func _apply_guild_settlement_gate(world: World) -> void:
 			st["founding_reason"] = str(gate.get("reason", "guild_settlement"))
 			st["founding_tick"] = int(gate.get("founding_tick", -1))
 			st["guild_id"] = "guild_%d_%d" % [center_rk, int(st.get("founding_tick", -1))]
-			if not was_formal and WorldMemory != null:
+			if not _polity_formal_announced.has(center_rk) and WorldMemory != null:
 				var tick_now: int = GameManager.tick_count if GameManager != null else 0
 				var polity_nm: String = str(st.get("polity_display_name", st.get("name", "")))
 				if polity_nm.is_empty():

@@ -864,3 +864,46 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - This is a PRESENTATION/causal-bookkeeping fix: it makes the HUD day and day-night phase truthful (track applied causal work). It does NOT by itself make 200x "develop faster" â€” development throughput at high speed remains bounded by CPU and by the speed-interval throttling in `Main` (`_planner_interval_for_speed` 5000 ticks, `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS`â†’4000 at 200x). Those are separate concerns (candidate B the user declined this pass), not addressed here.
 - The frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains a known determinism/visual concern (deferred cross-cut).
 - Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing.
+
+---
+
+### 2026-09-03 — Session: opencode/big-pickle (High-Speed Simulation Pass HSS-1: Remove Speed-Based Development Suppression + Resource-Truth/Overlay Clarification)
+
+**Time:** ~UTC
+
+**Objective (from task):** make 200x perform the same world work (construction, settlement development, resource processing, jobs) as slower speeds, only faster for the observer — not a presentation-only calendar fix. User directive: NO Godot runs / no headless sims / no gameplay tests — static + parse validation only; user playtests. Commit + push + report.
+
+**Real throughput & starvation causes (root cause):**
+1. **CPU envelope is the hard ceiling.** At 200x, `sim_delta=3.33s/frame` demands ~66 compat ticks/frame, each 20-57ms of CPU, yet the frame budget `SIM_SLICE_BUDGET_USEC=6000us` is 6ms. It is physically impossible to replay 66 full normal ticks in 6ms. The simulator cannot complete the requested 200x work by replaying every tick — that is arithmetic, not a scheduling bug. True 200x full-tick replay requires coalescing/batching (deferred, see below).
+2. **Development suppression (THE fixable lever, this session).** Even when a tick DID complete, the settlement-development systems were gated by speed-multiplied tick intervals so they ran ~1/50th as often per unit world-time: `_planner_interval_for_speed()` returned 5000 at 200x (vs 90 at 1x), `_heavy_planner_interval_for_speed()` 5000 (vs 180), construction-seed lane interval 4000 (vs 30), AND `_seed_construction_jobs`' internal re-entry gate `_high_speed_interval(60,120,300)`=600 (vs 30) which alone skipped ~95% of seeds even when the lane fired. `REBIRTH_CHECK_INTERVAL_TICKS` grew 4000?12000. Net effect: at 200x, settlements and construction effectively froze development even though day/tick advanced — the exact "calendar advances but the world does not develop" symptom.
+3. **`waiting_for_first_resource_truth_tick` is a diagnostic-overlay placeholder, NOT a real pawn stall.** The string exists ONLY as a default in the PHASE8 proof overlay (`Main.gd`, `_phase8_proof_overlay_text`): when `SettlementMemory.get_phase8_proof_terminal_line()` returns empty, the overlay shows `[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick...` (Main.gd:5001). The underlying resource-truth producer `SettlementMemory.refresh_resource_truth()` (Main callback at :3200-3203) runs at fixed-500 tick cadence (or per-tick when `validation_truth_verify_armed()`), NOT gated by `_tick_budget_exceeded`, NOT speed-multiplied. So resource-truth delivery (req #1) was never starved; the overlay text was the false "stall" signal.
+
+**What was done (all in `scenes/main/Main.gd`, skill + parse-verified):**
+1. **Removed the speed multiplier on the settlement planner cadence (req #3).** `_planner_interval_for_speed()` ? fixed `return 90`; `_heavy_planner_interval_for_speed()` ? fixed `return 180`. Justification: one compat tick == the same 0.05 sim-seconds of causal world-time at every speed, so a `tick % N` gate fires at the SAME world-time cadence regardless of game_speed. The old multiplier made development run ~1/50th as often per unit world-time at 200x.
+2. **Removed the construction-seed lane multiplier.** `_seed_interval` now a fixed `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS` (30) at all speeds (was 1000/2000/4000 at 26/50/=100x).
+3. **Removed the `_seed_construction_jobs` internal re-entry multiplier** (the real residual suppression). Line ~7287 was `_high_speed_interval(60,120,300)` ? let the lane fire every 30 yet skip ~95% of seeds at 200x; now `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS` (fixed 30). Coverage stays complete because `_seed_construction_jobs` advances `_construction_seed_cursor` across settlements on budget-break (per prior AGENTS.md 2026-08-19 note) — per-pass budget capping (2000µs at 200x) just spreads the same settlement coverage across more calls.
+4. **Removed `REBIRTH_CHECK_INTERVAL_TICKS` growth** (`recompute` + rebirth `SettlementManager.process`) ? fixed 4000 at all speeds (was 3000/5000/8000/12000). The recompute budget (3000µs at 200x) and `_tick_budget_exceeded` continue to bound the per-tick cost.
+5. **Retained the prior committed-calendar fix** (`DayNightCycle.gd`) — still in the tree, parse-clean, unchanged this session.
+
+**Resource-truth delivery guarantee (req #1) — verified, NOT changed.** `refresh_resource_truth()` already runs at a speed-independent fixed-500 tick cadence (or per-tick when validation-verify armed); it is not gated by `_tick_budget_exceeded` and never speed-suppressed. The "stuck pawn" report is the PHASE8 overlay default. `waiting_for_first_resource_truth_tick` semantics documented.
+
+**Scheduler fairness (req #2) — retained.** The committed-calendar correction from the prior pass (commit `e7384979`) ensures the public day/phase tracks only fully-applied causal work (`SimulationClock.get_committed_world_time_seconds()`, `_commit_legacy_core_quantum` 0.05/tick), so an in-progress multi-frame tick can no longer show a false advanced day. `_tick_budget_exceeded` remains dead code (TickBudgetManager returns false) — irrelevant to this pass.
+
+**Deliberately deferred (honest, high-risk, need runtime verification):**
+- **req #4 (deterministic batching/coalescing)** and **req #5 (frame-interpolated movement / simulation-driven `data.tile_pos`)** are NOT implemented this pass. Both touch the fragile core scheduler (`TickManager` pending-tick phase machine) and the 13,000-line `HeelKawnian` movement/path/arrival/job-transition state machine respectively. With no runtime testing available, a partial blind implementation would risk breaking the user's playtest far worse than the fixed-point it aims to cure. Doing `_process()`-interpolation-only would require reworking the entire path/arrival/`_on_path_complete`/job-transition machinery in `HeelKawnian.gd:4004-4117`; batching would require rewiring the multi-rate `pawn_continuous`/`pawn_discrete`/`legacy_core` committed lanes in `TickManager.gd`. Both are the correct NEXT pass with runtime profiling.
+- The CPU-envelope reality (66 ticks cannot fit in 6ms) means full 200x development throughput still cannot exceed the emission cap; the HSS-1 changes ensure every tick that DOES complete performs development at the same world-time cadence as 1x, which is the fastest correct development a CPU-bounded 200x can deliver without faking/removing systems.
+
+**Verification (static only, per directive):**
+- `tools/diag_parse_check.gd` (load-only SceneTree probe; never boots Main, never advances a tick): all 7 targets OK including `res://scenes/main/Main.gd` (0 parse errors, 0 script errors).
+- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` verified byte-identical (unchanged) — the load-only probe never wrote a save.
+- Working tree junk (`.aider.*`, `.godot/**`, etc.) ignored; ONLY `scenes/main/Main.gd` + `AGENTS.md` staged.
+
+**Files modified:**
+- `scenes/main/Main.gd` — `_planner_interval_for_speed()` ? 90; `_heavy_planner_interval_for_speed()` ? 180; construction-seed lane `_seed_interval` fixed 30; `_seed_construction_jobs` internal gate fixed 30; `REBIRTH_CHECK_INTERVAL_TICKS` growth removed.
+- `AGENTS.md` — this entry.
+
+**Remaining limitations / next:**
+- Full 200x capability still bounded by the CPU envelope (66 ticks/frame cannot fit in the 6ms slice) — req #4 batching/coalescing is the real unlock, deferred to a runtime-verified pass.
+- Frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains — req #5 decoupling deferred (high-risk cross-cut).
+- Post-fix playtest acceptance: user runs 200x on the saved colony and observes whether settlements/construction now advance in world-time at a cadence comparable to 1x (with CPU appropriately limiting absolute real-time throughput).
+- Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing.

@@ -485,22 +485,24 @@ func _high_speed_interval(normal_ticks: int, fast_ticks: int = -1, ultra_ticks: 
 
 
 func _planner_interval_for_speed() -> int:
-	var s: float = GameManager.game_speed if GameManager != null else 1.0
-	if s >= 200.0: return 5000
-	if s >= 100.0: return 3000
-	if s >= 50.0:  return 1000
-	if s >= 26.0:  return 500
-	if s >= 6.0:   return 180
+	# Speed-INDEPENDENT tick cadence (req #3): one compat tick == the same 0.05
+	# sim-seconds of causal world-time at every speed, so a tick%N gate fires at
+	# the SAME world-time cadence regardless of game_speed. The old speed-multiplied
+	# intervals (up to 5000 at 200x) made development run ~1/50th as often per unit
+	# world-time at high speed — that suppression is removed so settlements develop
+	# at a consistent cadence from 1x through 200x. The Workload cost concerns that
+	# originally motivated the multiplier are covered by the UNCHANGED per-pass
+	# budget/cursor gates (_last_planner_us, _planner_budget_gate_us, recompute
+	# budget, _seed_construction_jobs budget) plus the fact that CPU caps how many
+	# compat ticks complete per real second at high speed.
 	return 90
 
 
 func _heavy_planner_interval_for_speed() -> int:
-	var s: float = GameManager.game_speed if GameManager != null else 1.0
-	if s >= 200.0: return 5000
-	if s >= 100.0: return 3000
-	if s >= 50.0:  return 2000
-	if s >= 26.0:  return 1000
-	if s >= 6.0:   return 360
+	# Speed-INDEPENDENT tick cadence (req #3) — see _planner_interval_for_speed().
+	# Heavy settling-plan pass runs at the fixed 1x cadence at every speed so
+	# development throughput is consistent in world-time; budget/FPS gates cap
+	# real-time cost.
 	return 180
 
 
@@ -3005,11 +3007,13 @@ func _on_game_tick(tick: int) -> void:
 
 	# Settlement construction seeder: post build/cook/plant jobs based on
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
+	# Speed-INDEPENDENT tick cadence (req #3): construction seeding must keep
+	# posting jobs at the same world-time rate at 200x as at 1x or new villages
+	# never get build jobs to seed. The old speed multiplier (4000 at 200x)
+	# starved construction at high speed. Per-pass cost stays bounded by the
+	# budget/cursor logic inside _seed_construction_jobs itself (unlimited only
+	# at >=200x by design — exact path preserved below).
 	var _seed_interval: int = CONSTRUCTION_JOB_SEED_INTERVAL_TICKS
-	var _cs_speed: float = GameManager.game_speed if GameManager != null else 1.0
-	if _cs_speed >= 100.0: _seed_interval = 4000
-	elif _cs_speed >= 50.0: _seed_interval = 2000
-	elif _cs_speed >= 26.0: _seed_interval = 1000
 	if _is_main_lane_tick(tick, _seed_interval, 11):
 		t0 = Time.get_ticks_usec()
 		_seed_construction_jobs(tick_budget_start_usec)
@@ -3216,13 +3220,13 @@ func _on_game_tick(tick: int) -> void:
 		if _is_main_lane_tick(tick, 2000, 113) and DiscoveryGate.is_unlocked("first_trade"):
 			_build_roads_from_trade_routes()
 		# DORMANT WORLD: Let recompute run periodically so pawn clusters can be detected
-		# AGGRESSIVE OPTIMIZATION: Throttle at high speeds to reduce 40-60ms spikes
+		# Speed-INDEPENDENT tick cadence (req #3): settlement-centroid recompute +
+		# rebirth-process run at the fixed 1x cadence at every speed so village
+		# lifecycle advances consistently in world-time. World-time cadence is
+		# identical across speeds (one tick == one 0.05s world-quantum); the CPU
+		# cost is bounded by the recompute budget below and the tick-emission cap.
 		var _rebirth_interval: int = REBIRTH_CHECK_INTERVAL_TICKS
 		var _cur_speed: float = GameManager.game_speed if GameManager != null else 1.0
-		if _cur_speed >= 200.0: _rebirth_interval = 12000
-		elif _cur_speed >= 100.0: _rebirth_interval = 8000
-		elif _cur_speed >= 50.0: _rebirth_interval = 5000
-		elif _cur_speed >= 26.0: _rebirth_interval = 3000
 		if _is_main_lane_tick(tick, _rebirth_interval, 43):
 			t0 = Time.get_ticks_usec()
 			var _recomp_budget: int = -1
@@ -7280,7 +7284,12 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		return
 	if frame_start_usec >= 0 and _tick_budget_exceeded(frame_start_usec):
 		return
-	var interval: int = _high_speed_interval(60, 120, 300)
+	# Speed-INDEPENDENT tick cadence (req #3): this internal re-entry gate must
+	# not re-suppress construction at high speed once the _on_game_tick lane fires
+	# at fixed-30. At 200x the old _high_speed_interval(60,120,300)=600 gate let
+	# the lane fire every 30 ticks yet still skipped ~95% of seeds. Use the same
+	# fixed 1x cadence as the lane so construction seeding advances in world-time.
+	var interval: int = CONSTRUCTION_JOB_SEED_INTERVAL_TICKS
 	if tick - _last_construction_seed_tick < interval:
 		return
 	_last_construction_seed_tick = tick

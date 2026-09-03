@@ -57,17 +57,28 @@ static func canonical_seconds_to_legacy_tick(committed_seconds: float) -> int:
 		return 0
 	return int(floorf((maxf(0.0, committed_seconds) + q * 0.000001) / q))
 
-## CURRENT API — current equivalent legacy calendar tick derived from the live
-## compatibility tick (TickManager.current_tick). The game is only partially
-## migrated to canonical time: SimulationClock COMMITTED can be held back by an
-## authoritative lane while the actual live game advances, which froze the HUD
-## calendar. The live calendar must therefore follow the live compat tick, not
-## the committed canonical frontier.
+## CURRENT API — current equivalent legacy calendar tick derived from
+## SimulationClock COMMITTED canonical world time (the frontier at which every
+## authoritative lane has completed its causal work), converted via the canonical
+## bridge quantum. HK-SCHED-P1 (comitted-based calendar): this is the ONLY
+## causal-soundness-satisfying source for the PUBLIC day — it never advances to a
+## tick whose work has not been applied. It is clamped to the live compatibility
+## tick (TickManager.current_tick) so it can never roll past what the scheduler
+## has actually begun, and it can never regress (committed is monotonic).
 static func get_current_legacy_calendar_tick() -> int:
 	var tm: Node = _autoload(&"TickManager")
-	if tm == null or not ("current_tick" in tm):
+	if tm == null:
 		return 0
-	return int(tm.current_tick)
+	var clock: Node = _autoload(&"SimulationClock")
+	if clock == null or not clock.has_method("get_committed_world_time_seconds"):
+		return 0
+	var committed: float = float(clock.get_committed_world_time_seconds())
+	var tick: int = canonical_seconds_to_legacy_tick(committed)
+	# Never present a day ahead of the scheduler heartbeat that has actually begun.
+	var live: int = int(tm.current_tick) if ("current_tick" in tm) else tick
+	if tick > live:
+		tick = live
+	return maxi(0, tick)
 
 ## Four key colors around the clock.
 ## Phase 0.00 = midnight, 0.25 = dawn, 0.50 = noon, 0.75 = dusk.

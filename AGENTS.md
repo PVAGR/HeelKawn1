@@ -834,3 +834,33 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - `_pawn_salt`'s tick_count term is what makes the wander draw change every tick; since this was already present, the ONLY behavioral gap this session closed is that pawns now reach the wander draw every idle tick instead of every 10th. No RNG-stream change, no seed change, no frame coupling — determinism preserved.
 - The `_discrete_decisions_evicted` counter (non-zero) in F10 diagnostics will signal the watchdog is firing; the cooldown-wander can be profiled via `_pd_stage` counters under `--profile-pawn-dispatch` if needed (not run this session per directive).
 - Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Frame-coupled `_process` movement remains the pre-existing 1x/2x determinism cross-cut (deferred).
+
+---
+
+### 2026-09-03 — Session: opencode/big-pickle (Causal-Soundness Calendar Fix: Public Day Tracks Applied Work, Not the In-Progress Scheduler Heartbeat)
+
+**Time:** ~UTC
+
+**What was done:**
+
+1. **Located the causal-soundness breach for "day advances but the world does not."** The public calendar day derives from `DayNightCycle.get_current_legacy_calendar_tick()` (used by ColonyHUD `_time_line` day/year + phase, and DayNightCycle day-rollover). That accessor returned **`TickManager.current_tick`** — the scheduler **heartbeat that increments at tick START** (`TickManager._start_pending_tick`, current_tick += 1) — **BEFORE** that tick's causal work completes. A 20-57 ms tick spanning many 6 ms slices at 200x showed the *new* (in-progress) day while not one piece of that tick's causal work (pawn AI, jobs, settlements) had been applied yet. The codebase's own documentation ALREADY states the calendar must derive from COMMITTED canonical world time (ColonyHUD `_time_line` comment "derives from committed canonical time (P2B), not the compatibility tick counter"; DayNightCycle canonical-commit docstring) — but the implementation silently returned `current_tick`, contradicting it.
+
+2. **Confirmed the authoritative causal frontier is SimulationClock COMMITTED.** `_complete_pending_tick` runs all listeners for a tick, THEN `_commit_legacy_core_quantum()` advances the `legacy_core` lane by `LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION` (0.05 s) and recomputes committed (min over authoritative lanes) — so `get_committed_world_time_seconds()` only ever reflects FULLY-APPLIED completed transactions. `_recompute_committed` = min applied over lanes; pawn_continuous/pawn_discrete lanes only advance when all their pawns applied through F. This is the exact "work has been applied" frontier.
+
+3. **Fixed the calendar (HK-SCHED-P1, in `scripts/world/DayNightCycle.gd`):** `get_current_legacy_calendar_tick()` now derives from `SimulationClock.get_committed_world_time_seconds()` converted via `canonical_seconds_to_legacy_tick(committed)` (the canonical bridge quantum, 0.05), **clamped to never exceed** `TickManager.current_tick` (so the day can never roll past the heartbeat that has begun) and **never regresses** (committed is monotonic). Result: the public day advances ONLY to the last fully-completed, causally-applied tick. During an in-progress tick the day holds at the last committed frontier instead of showing the unfinished tick. This is precisely "never advance the public day/tick past causal work that has not been applied."
+
+4. **Dropped the proposed "target-lead cap" sub-part with evidence (architectural conflict, NOT scope creep).** Option A's second half would cap `SimulationClock` target (`world_time_seconds`) to a bounded lead over committed. Static proof this is impossible without breaking the published regression contract: `tools/diag_multirate_smoke.gd:404` asserts `target_ok = ... w2_target_rate > 100.0 and w2_target_rate < 400.0` — the multi-rate architecture deliberately advances the TARGET clock at game speed (100-400x at 200x) while COMMITTED tracks causal work (documented in SimulationClock.gd:80-91: "TARGET... requested simulation frontier... COMMITTED... causal history"). Capping target would collapse `w2_target_rate`, failing the smoke AND contradicting the foundation. The calendar fix alone is the correct realization of the causal-soundness requirement; the target clock is aspirational-by-design, never read as "applied history." Also confirmed: `diag_clock_contract.gd`/`diag_legacy_commit_bridge.gd` assert exact `advance_target(dt)` math — a target clamp inside `advance_target` would break them too.
+
+**Verification (static only, per user directive — NO sim/gameplay change, no Godot sim run):**
+- `tools/diag_parse_check.gd`-style load probe (temporary `diag_parse_daynight.gd`, SceneTree `_initialize` script-load only, never boots Main, never advances a tick): `DayNightCycle.gd -> OK`, `SimulationClock.gd -> OK`, `TickManager.gd -> OK`. Zero parse errors.
+- Canonical conversion confirmed: `LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION = BASE_TICK_INTERVAL (0.05) * SPEED_MULTIPLIERS[0]` = 0.05; `floor(committed/0.05)` = completed-tick count; clamp to `current_tick` holds during in-progress ticks.
+- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` (at `%APPDATA%\Godot\app_userdata\HeelKawn\heelkawn_colony_autosave.sav`) **unchanged** — identical to the 2026-09-03 baseline; the load-only probe never wrote it.
+
+**Files modified:**
+- `scripts/world/DayNightCycle.gd` — `get_current_legacy_calendar_tick()` committed-based + clamped monotonic calendar (HK-SCHED-P1). Single accessor; no sim-rule, no per-tick pawn AI/jobs/needs/settlements/path change, no new watchdog/timeout.
+- `AGENTS.md` — this entry.
+
+**Known remaining / notes:**
+- This is a PRESENTATION/causal-bookkeeping fix: it makes the HUD day and day-night phase truthful (track applied causal work). It does NOT by itself make 200x "develop faster" — development throughput at high speed remains bounded by CPU and by the speed-interval throttling in `Main` (`_planner_interval_for_speed` 5000 ticks, `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS`→4000 at 200x). Those are separate concerns (candidate B the user declined this pass), not addressed here.
+- The frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains a known determinism/visual concern (deferred cross-cut).
+- Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing.

@@ -603,6 +603,22 @@ var _target_world_pos: Vector2 = Vector2.ZERO
 ## pawn commit whole-tile steps at a rate set by WORLD time, independent of FPS.
 var _sim_movement_accum: float = 0.0
 
+## P2-MOVEMENT-FIX: Visual catch-up target. When the authoritative path
+## completes (all logical tile steps consumed), the sprite may still be
+## far from the final tile position. This stores the authoritative
+## destination so _process can continue interpolating until the sprite
+## converges, independent of whether _path is still populated.
+var _visual_catchup_target: Vector2 = Vector2.ZERO
+var _visual_catching_up: bool = false
+
+## P2-MOVEMENT-FIX: Lightweight movement lifecycle counters.
+## Diagnostics only — never affect gameplay.
+var _mv_path_starts: int = 0
+var _mv_logical_steps: int = 0
+var _mv_completions: int = 0
+var _mv_cancellations: int = 0
+var _mv_max_visual_desync_tiles: float = 0.0
+
 ## Ticks remaining in the EATING state.
 var _eat_ticks_left: int = 0
 
@@ -1284,11 +1300,15 @@ func _step_path_deterministic() -> bool:
 		return false
 	var from_step: Vector2i = data.tile_pos
 	data.tile_pos = _target_tile
+	_mv_logical_steps += 1
 	if from_step != _target_tile and _world != null:
 		if RoadMemory != null:
 			RoadMemory.record_step(from_step, _target_tile, _world)
 		if _world.has_method("record_footstep"):
 			_world.record_footstep(data.tile_pos)
+	# P2-MOVEMENT-FIX: Coalesce footstep dust when multiple tiles are
+	# consumed in one sim update. _emit_footstep_dust() already has a
+	# real-time throttle (250ms), so only the first emits dust.
 	_emit_footstep_dust()
 	_track_region_visit(_target_tile)
 	_advance_path()
@@ -3980,6 +4000,9 @@ func nudge_if_standing_on_solid() -> void:
 	if dest.x < 0:
 		return
 	_clear_path()
+	# P2-MOVEMENT-FIX: Reset movement accumulator and visual catch-up on teleport.
+	_sim_movement_accum = 0.0
+	_visual_catching_up = false
 	# Stuck pawns are never supposed to be mid-job on the tile that became
 	# a wall, but if pathing desyncs, free the job so the AI can recover.
 	if _current_job != null:
@@ -4011,6 +4034,9 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	if dest.x < 0:
 		return
 	_clear_path()
+	# P2-MOVEMENT-FIX: Reset movement accumulator and visual catch-up on teleport.
+	_sim_movement_accum = 0.0
+	_visual_catching_up = false
 	# If we're standing on a build site, drop work so the site can be committed.
 	if _current_job != null:
 		var je: Job = _current_job
@@ -4103,12 +4129,37 @@ func sanity_check_impassable_tile() -> void:
 func _process(delta: float) -> void:
 	if data == null or GameManager.is_paused:
 		return
-	
-	# PERFORMANCE: Skip movement interpolation if no path
+
+	# P2-MOVEMENT-FIX: Visual catch-up mode. When the authoritative path has
+	# completed but the sprite hasn't converged to the final tile position,
+	# interpolate toward _visual_catchup_target. This is presentation-only
+	# and does NOT touch data.tile_pos or _path.
 	if _path.is_empty():
+		if not _visual_catching_up:
+			return
+		# Interpolate sprite toward the authoritative destination
+		var catchup_step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * maxf(GameManager.game_speed, 1.0)
+		var to_catchup: Vector2 = _visual_catchup_target - position
+		var catchup_dist_sq: float = to_catchup.length_squared()
+		var catchup_step_sq: float = catchup_step * catchup_step
+		if catchup_dist_sq > catchup_step_sq:
+			if catchup_dist_sq > 0.000001:
+				position += to_catchup * (catchup_step / sqrt(catchup_dist_sq))
+		else:
+			# Sprite has converged — snap and stop
+			position = _visual_catchup_target
+			_visual_catching_up = false
+			set_process(false)
+		# Track max visual desync
+		if _world != null:
+			var desync_tiles: float = absi(data.tile_pos.x - int(round(position.x / World.TILE_PIXELS))) + absi(data.tile_pos.y - int(round(position.y / World.TILE_PIXELS)))
+			if desync_tiles > _mv_max_visual_desync_tiles:
+				_mv_max_visual_desync_tiles = desync_tiles
 		return
+
+	# Normal path-following visual interpolation
 	var _proc_start: int = Time.get_ticks_usec() if TickProfiler != null and TickProfiler.is_enabled() else 0
-	
+
 	# PERFORMANCE: Adaptive visual update rate based on game speed
 	# At high speeds, players can't perceive smooth movement anyway
 	# But we need to show SOME movement so pawns don't appear frozen
@@ -4118,12 +4169,12 @@ func _process(delta: float) -> void:
 		visual_interval += MOBILE_VISUAL_INTERVAL_BONUS
 	visual_interval = clampi(visual_interval, 2, 36)
 	var should_update_visuals: bool = (_visual_frame_counter >= visual_interval)
-	
+
 	if should_update_visuals:
 		_visual_frame_counter = 0
-	
+
 	_anim_t += delta * (0.5 + GameManager.game_speed * 0.25)
-		
+
 	var step: float = WALK_SPEED_WORLD_UNITS_PER_SEC * delta * GameManager.game_speed * _meaning_speed_multiplier
 	if data.tile_pos != _movement_terrain_tile_cache:
 		_refresh_movement_terrain_cache(data.tile_pos)
@@ -4169,6 +4220,12 @@ func _process(delta: float) -> void:
 			position += to_target * (step / sqrt(to_target_dist_sq))
 	else:
 		position = _target_world_pos
+
+	# P2-MOVEMENT-FIX: Track max visual desync for diagnostics
+	if _world != null:
+		var desync_tiles: float = absi(data.tile_pos.x - int(round(position.x / World.TILE_PIXELS))) + absi(data.tile_pos.y - int(round(position.y / World.TILE_PIXELS)))
+		if desync_tiles > _mv_max_visual_desync_tiles:
+			_mv_max_visual_desync_tiles = desync_tiles
 
 	# ARCHITECT T006: SpatialManager chunk tracking is driven by the sim lane
 	# (_step_path_deterministic) which already updates pawn position on tile commit.
@@ -4224,6 +4281,10 @@ func _refresh_movement_terrain_cache(tile: Vector2i) -> void:
 
 
 func _start_path(path: Array[Vector2i]) -> void:
+	# P2-MOVEMENT-FIX: Reset movement accumulator on every new path.
+	# Credit from a previous path must never leak into the new one.
+	_sim_movement_accum = 0.0
+	_visual_catching_up = false
 	_path = path
 	_path_index = 0
 	if _path.is_empty():
@@ -4232,6 +4293,7 @@ func _start_path(path: Array[Vector2i]) -> void:
 		return
 	_target_tile = _path[0]
 	_target_world_pos = _world.tile_to_world(_target_tile)
+	_mv_path_starts += 1
 	set_process(true)  # Enable per-frame movement while pathing
 
 
@@ -4265,6 +4327,14 @@ func _advance_path() -> void:
 		if diff.length_squared() > 0.01:
 			_facing_dir = diff
 	else:
+		# P2-MOVEMENT-FIX: Path exhausted — set visual catch-up target to the
+		# final authoritative tile position BEFORE clearing the path. This
+		# lets _process continue interpolating the sprite to the destination
+		# even after _path is empty.
+		if _world != null and data != null:
+			_visual_catchup_target = _world.tile_to_world(data.tile_pos)
+			_visual_catching_up = true
+		_mv_completions += 1
 		_clear_path()
 		_on_path_complete()
 
@@ -4273,8 +4343,14 @@ func _clear_path() -> void:
 	_path = []
 	_path_index = 0
 	_target_tile = data.tile_pos if data != null else Vector2i.ZERO
-	_target_world_pos = position
-	set_process(false)  # No movement needed â€” stop per-frame updates
+	# P2-MOVEMENT-FIX: Don't snap _target_world_pos to current position.
+	# If the sprite hasn't caught up yet, _visual_catching_up will be true
+	# and _process will use _visual_catchup_target instead.
+	_target_world_pos = _world.tile_to_world(_target_tile) if _world != null and data != null else position
+	# Only disable _process if the sprite has converged. If still catching
+	# up, keep _process enabled so the sprite can interpolate to the target.
+	if not _visual_catching_up:
+		set_process(false)  # No movement needed — stop per-frame updates
 
 
 ## P4: True arrival check for a claimed job. At high speed the frame-coupled
@@ -4284,15 +4360,41 @@ func _clear_path() -> void:
 ## (Chebyshev distance <= 1) to it, so a completed path to an adjacent final
 ## tile is not misread as a spurious unclaim (which would bounce the pawn to
 ## IDLE and prevent WALKING->WORKING observation at 200x).
+## P2-MOVEMENT-FIX: Returns true for job types whose target tile is
+## inherently impassable, requiring the pawn to work from an adjacent tile.
+## For these jobs, work_tile is set to an adjacent passable neighbor by
+## JobManager, but the pathfinder may still end the path one tile short.
+func _job_allows_adjacent_arrival() -> bool:
+	if _current_job == null:
+		return false
+	var jt: int = _current_job.type
+	# Jobs on impassable terrain/features — pawn works from adjacent tile
+	match jt:
+		Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.CHOP, Job.Type.HUNT:
+			return true
+		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
+			return true
+		Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_BARRACKS:
+			return true
+	return false
+
+
 func _pawn_at_work_tile() -> bool:
 	if _current_job == null or data == null:
 		return false
 	var wt: Vector2i = _current_job.work_tile
 	if data.tile_pos == wt:
 		return true
-	var dx: int = data.tile_pos.x - wt.x
-	var dy: int = data.tile_pos.y - wt.y
-	return absi(dx) <= 1 and absi(dy) <= 1
+	# P2-MOVEMENT-FIX: Only allow adjacent arrival for jobs whose target
+	# tile is inherently impassable (walls, ore veins, mountain edges).
+	# For all other jobs the pawn must arrive at work_tile exactly.
+	# work_tile is already set to an adjacent passable neighbor for
+	# impassable-target jobs by JobManager, so exact arrival is correct.
+	if _job_allows_adjacent_arrival():
+		var dx: int = data.tile_pos.x - wt.x
+		var dy: int = data.tile_pos.y - wt.y
+		return absi(dx) <= 1 and absi(dy) <= 1
+	return false
 
 
 func _on_path_complete() -> void:

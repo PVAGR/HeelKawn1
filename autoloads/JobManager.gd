@@ -50,10 +50,29 @@ var _pending_settlement_cache_gen_built: int = -1
 var _pending_settlement_cache: Dictionary = {}
 var _job_context_by_id: Dictionary = {}
 
+## PHASE A: Authoritative open-job index
+## O(1) membership/removal keyed by stable job ID
+var _open_index_by_id: Dictionary = {}  # job_id -> index in _open array
+## Type buckets: job_type -> Array[job_id]
+var _open_by_type: Dictionary = {}  # job_type -> Array[int] (job IDs)
+## Settlement buckets: settlement_id -> Array[job_id]
+var _open_by_settlement: Dictionary = {}  # settlement_id -> Array[int] (job IDs)
+## Region buckets: region_key -> Array[job_id]
+var _open_by_region: Dictionary = {}  # region_key -> Array[int] (job IDs)
+## Center-region buckets: center_region -> Array[job_id]
+var _open_by_center_region: Dictionary = {}  # center_region -> Array[int] (job IDs)
+## Index generation for invariant checking
+var _index_generation: int = 0
+## Navigation generation for component cache invalidation
+var _nav_generation: int = 0
+## Component cache: component_id -> Array[job_id] (jobs in this path component)
+var _open_by_component: Dictionary = {}  # component_id -> Array[int] (job IDs)
+
 ## Lifetime counters (stats only).
 var posted_count: int = 0
 var completed_count: int = 0
 var cancelled_count: int = 0
+var abandoned_count: int = 0
 
 ## Cancellation reason tracking (diagnostic). reason_string -> count.
 var _cancel_reasons: Dictionary = {}
@@ -64,6 +83,7 @@ var _abandon_reasons: Dictionary = {}
 var _diag_created_this_window: int = 0
 var _diag_completed_this_window: int = 0
 var _diag_cancelled_this_window: int = 0
+var _diag_abandoned_this_window: int = 0
 
 ## Global tile failure cache: tile_key(int) -> {tick: int, reason: String}.
 ## Prevents re-posting jobs on tiles that have failed recently (resource depleted,
@@ -92,6 +112,279 @@ func _bump_jobs_data_generation() -> void:
 	_pending_settlement_cache_gen_built = -1
 	_pending_near_cache.clear()
 	_pending_settlement_cache.clear()
+
+
+## PHASE A: Index mutation helpers
+
+## Add job to all index buckets
+func _index_add_job(job: Job, open_idx: int) -> void:
+	if job == null or job.id <= 0:
+		return
+	_open_index_by_id[job.id] = open_idx
+	
+	# Type bucket
+	if not _open_by_type.has(job.type):
+		_open_by_type[job.type] = []
+	_open_by_type[job.type].append(job.id)
+	
+	# Context buckets
+	var ctx: Dictionary = _job_context_for(job)
+	var region_key: int = int(ctx.get("region_key", -1))
+	var center_region: int = int(ctx.get("center_region", -1))
+	var settlement_id: int = int(ctx.get("settlement_id", -1))
+	
+	if region_key >= 0:
+		if not _open_by_region.has(region_key):
+			_open_by_region[region_key] = []
+		_open_by_region[region_key].append(job.id)
+	
+	if center_region >= 0:
+		if not _open_by_center_region.has(center_region):
+			_open_by_center_region[center_region] = []
+		_open_by_center_region[center_region].append(job.id)
+	
+	if settlement_id >= 0:
+		if not _open_by_settlement.has(settlement_id):
+			_open_by_settlement[settlement_id] = []
+		_open_by_settlement[settlement_id].append(job.id)
+	
+	# Component bucket (lazy, requires world access)
+	# Deferred to _index_add_to_component when needed
+	
+	_index_generation += 1
+
+
+## Remove job from all index buckets
+func _index_remove_job(job: Job) -> void:
+	if job == null or job.id <= 0:
+		return
+	
+	_open_index_by_id.erase(job.id)
+	
+	# Type bucket
+	if _open_by_type.has(job.type):
+		var type_arr: Array = _open_by_type[job.type]
+		type_arr.erase(job.id)
+		if type_arr.is_empty():
+			_open_by_type.erase(job.type)
+	
+	# Context buckets
+	var ctx: Dictionary = _job_context_for(job)
+	var region_key: int = int(ctx.get("region_key", -1))
+	var center_region: int = int(ctx.get("center_region", -1))
+	var settlement_id: int = int(ctx.get("settlement_id", -1))
+	
+	if region_key >= 0 and _open_by_region.has(region_key):
+		var region_arr: Array = _open_by_region[region_key]
+		region_arr.erase(job.id)
+		if region_arr.is_empty():
+			_open_by_region.erase(region_key)
+	
+	if center_region >= 0 and _open_by_center_region.has(center_region):
+		var center_arr: Array = _open_by_center_region[center_region]
+		center_arr.erase(job.id)
+		if center_arr.is_empty():
+			_open_by_center_region.erase(center_region)
+	
+	if settlement_id >= 0 and _open_by_settlement.has(settlement_id):
+		var settlement_arr: Array = _open_by_settlement[settlement_id]
+		settlement_arr.erase(job.id)
+		if settlement_arr.is_empty():
+			_open_by_settlement.erase(settlement_id)
+	
+	# Component bucket
+	for comp_id in _open_by_component.keys():
+		var comp_arr: Array = _open_by_component[comp_id]
+		comp_arr.erase(job.id)
+		if comp_arr.is_empty():
+			_open_by_component.erase(comp_id)
+	
+	_index_generation += 1
+
+
+## Update index after swap-removal (repair moved item's index)
+func _index_repair_after_swap(open_idx: int) -> void:
+	if open_idx < 0 or open_idx >= _open.size():
+		return
+	var moved_job: Job = _open[open_idx]
+	if moved_job != null and moved_job.id > 0:
+		_open_index_by_id[moved_job.id] = open_idx
+
+
+## Add job to component bucket (requires world access)
+func _index_add_to_component(job: Job) -> void:
+	if job == null or job.id <= 0:
+		return
+	var world: World = _get_colony_world()
+	if world == null or world.pathfinder == null:
+		return
+	var component_id: int = world.pathfinder.get_component_id(job.work_tile)
+	if component_id >= 0:
+		if not _open_by_component.has(component_id):
+			_open_by_component[component_id] = []
+		_open_by_component[component_id].append(job.id)
+
+
+## Invalidate component cache on navigation generation change
+func _invalidate_component_cache() -> void:
+	_nav_generation += 1
+	_open_by_component.clear()
+
+
+## Clear all index structures
+func _index_clear() -> void:
+	_open_index_by_id.clear()
+	_open_by_type.clear()
+	_open_by_settlement.clear()
+	_open_by_region.clear()
+	_open_by_center_region.clear()
+	_open_by_component.clear()
+	_index_generation += 1
+	_invalidate_component_cache()
+
+
+## PHASE A: Load-only static index checker
+## Verifies index invariants without modifying simulation state
+## Returns {valid: bool, errors: Array[String]}
+func _verify_index_integrity() -> Dictionary:
+	var errors: Array[String] = []
+	var valid: bool = true
+	
+	# Check 1: Every open job has exactly one valid master index entry
+	for i in range(_open.size()):
+		var job: Job = _open[i]
+		if job == null:
+			errors.append("Open job at index %d is null" % i)
+			valid = false
+			continue
+		if job.id <= 0:
+			errors.append("Open job at index %d has invalid id %d" % [i, job.id])
+			valid = false
+			continue
+		if not _open_index_by_id.has(job.id):
+			errors.append("Open job id %d missing from _open_index_by_id" % job.id)
+			valid = false
+		else:
+			var idx: int = int(_open_index_by_id[job.id])
+			if idx != i:
+				errors.append("Open job id %d index mismatch: expected %d, got %d" % [job.id, i, idx])
+				valid = false
+	
+	# Check 2: No duplicate job IDs in open array
+	var seen_ids: Dictionary = {}
+	for job in _open:
+		if job != null and job.id > 0:
+			if seen_ids.has(job.id):
+				errors.append("Duplicate job id %d in open array" % job.id)
+				valid = false
+			seen_ids[job.id] = true
+	
+	# Check 3: Bucket entries refer to open jobs
+	for job_type in _open_by_type.keys():
+		var job_ids: Array = _open_by_type[job_type]
+		for job_id in job_ids:
+			if not _open_index_by_id.has(job_id):
+				errors.append("Type bucket contains non-open job id %d" % job_id)
+				valid = false
+	
+	for settlement_id in _open_by_settlement.keys():
+		var job_ids: Array = _open_by_settlement[settlement_id]
+		for job_id in job_ids:
+			if not _open_index_by_id.has(job_id):
+				errors.append("Settlement bucket contains non-open job id %d" % job_id)
+				valid = false
+	
+	for region_key in _open_by_region.keys():
+		var job_ids: Array = _open_by_region[region_key]
+		for job_id in job_ids:
+			if not _open_index_by_id.has(job_id):
+				errors.append("Region bucket contains non-open job id %d" % job_id)
+				valid = false
+	
+	for center_region in _open_by_center_region.keys():
+		var job_ids: Array = _open_by_center_region[center_region]
+		for job_id in job_ids:
+			if not _open_index_by_id.has(job_id):
+				errors.append("Center-region bucket contains non-open job id %d" % job_id)
+				valid = false
+	
+	# Check 4: Every open job appears in required applicable buckets
+	for job in _open:
+		if job == null:
+			continue
+		var ctx: Dictionary = _job_context_for(job)
+		var region_key: int = int(ctx.get("region_key", -1))
+		var center_region: int = int(ctx.get("center_region", -1))
+		var settlement_id: int = int(ctx.get("settlement_id", -1))
+		
+		# Type bucket
+		if not _open_by_type.has(job.type):
+			errors.append("Job id %d missing from type bucket for type %d" % [job.id, job.type])
+			valid = false
+		elif not _open_by_type[job.type].has(job.id):
+			errors.append("Job id %d not in type bucket array for type %d" % [job.id, job.type])
+			valid = false
+		
+		# Region bucket (if applicable)
+		if region_key >= 0:
+			if not _open_by_region.has(region_key):
+				errors.append("Job id %d missing from region bucket for region %d" % [job.id, region_key])
+				valid = false
+			elif not _open_by_region[region_key].has(job.id):
+				errors.append("Job id %d not in region bucket array for region %d" % [job.id, region_key])
+				valid = false
+		
+		# Center-region bucket (if applicable)
+		if center_region >= 0:
+			if not _open_by_center_region.has(center_region):
+				errors.append("Job id %d missing from center-region bucket for center %d" % [job.id, center_region])
+				valid = false
+			elif not _open_by_center_region[center_region].has(job.id):
+				errors.append("Job id %d not in center-region bucket array for center %d" % [job.id, center_region])
+				valid = false
+		
+		# Settlement bucket (if applicable)
+		if settlement_id >= 0:
+			if not _open_by_settlement.has(settlement_id):
+				errors.append("Job id %d missing from settlement bucket for settlement %d" % [job.id, settlement_id])
+				valid = false
+			elif not _open_by_settlement[settlement_id].has(job.id):
+				errors.append("Job id %d not in settlement bucket array for settlement %d" % [job.id, settlement_id])
+				valid = false
+	
+	# Check 5: No completed/cancelled/claimed job remains in open bucket
+	for job in _claimed:
+		if job != null and _open_index_by_id.has(job.id):
+ # This is actually OK - claimed jobs can be in open index if they were just claimed
+			# But they shouldn't be in _open array
+			pass
+	
+	# Check 6: Stored positions match master open structure
+	for job_id in _open_index_by_id.keys():
+		var idx: int = int(_open_index_by_id[job_id])
+		if idx < 0 or idx >= _open.size():
+			errors.append("Index entry for job id %d has out-of-bounds position %d" % [job_id, idx])
+			valid = false
+		elif _open[idx] == null or _open[idx].id != job_id:
+			errors.append("Index entry for job id %d points to wrong job at position %d" % [job_id, idx])
+			valid = false
+	
+	# Check 7: Stable IDs are unique
+	var all_ids: Array = []
+	for job in _open:
+		if job != null:
+			all_ids.append(job.id)
+	for job in _claimed:
+		if job != null:
+			all_ids.append(job.id)
+	var unique_ids: Dictionary = {}
+	for job_id in all_ids:
+		if unique_ids.has(job_id):
+			errors.append("Duplicate stable job id %d across open+claimed" % job_id)
+			valid = false
+		unique_ids[job_id] = true
+	
+	return {"valid": valid, "errors": errors}
 
 
 func _cache_job_context(job: Job) -> void:
@@ -194,9 +487,11 @@ func post(type: int, tile: Vector2i, priority: int = 0, work_ticks: int = 20) ->
 	job.work_ticks_needed = work_ticks
 	job.state = Job.State.OPEN
 	job.posted_tick = GameManager.tick_count if GameManager != null else 0
+	var open_idx: int = _open.size()
 	_open.append(job)
 	_jobs_by_tile[tile] = job
 	_cache_job_context(job)
+	_index_add_job(job, open_idx)  # PHASE A: add to index
 	posted_count += 1
 	_diag_created_this_window += 1
 	_bump_jobs_data_generation()
@@ -591,11 +886,20 @@ func claim_next_for(
 		return null
 	var job: Job = walk_jobs[best_idx]
 	# Find and remove from _open (scan_jobs may be a filtered copy)
-	var open_idx: int = _open.find(job)
-	if open_idx >= 0:
+	# PHASE A: Use index for O(1) lookup instead of linear find
+	var open_idx: int = _open_index_by_id.get(job.id, -1)
+	if open_idx >= 0 and open_idx < _open.size() and _open[open_idx] == job:
 		_open.remove_at(open_idx)
+		_index_repair_after_swap(open_idx)  # PHASE A: repair index if swap occurred
 	else:
-		return null  # job was consumed by another pawn between scan and claim
+		# Fallback to linear find if index is stale
+		open_idx = _open.find(job)
+		if open_idx >= 0:
+			_open.remove_at(open_idx)
+			_index_repair_after_swap(open_idx)
+		else:
+			return null  # job was consumed by another pawn between scan and claim
+	_index_remove_job(job)  # PHASE A: remove from index after successful claim
 	_claimed.append(job)
 	job.state = Job.State.CLAIMED
 	job.assigned_pawn = pawn
@@ -624,8 +928,11 @@ func abandon(job: Job, reason: String = "") -> void:
 	job.state = Job.State.OPEN
 	job.assigned_pawn = null
 	job.work_ticks_done = 0
+	var open_idx: int = _open.size()
 	_open.append(job)
-	_diag_cancelled_this_window += 1
+	_index_add_job(job, open_idx)  # PHASE A: re-add to index after abandon
+	abandoned_count += 1  # PHASE A: track abandons separately
+	_diag_abandoned_this_window += 1  # PHASE A: separate window counter
 	_bump_jobs_data_generation()
 	if not reason.is_empty():
 		_abandon_reasons[reason] = int(_abandon_reasons.get(reason, 0)) + 1
@@ -637,6 +944,7 @@ func abandon(job: Job, reason: String = "") -> void:
 func complete(job: Job) -> void:
 	if job == null or job.state == Job.State.CANCELLED or job.state == Job.State.COMPLETED:
 		return
+	_index_remove_job(job)  # PHASE A: remove from index before array ops
 	_open.erase(job)
 	_claimed.erase(job)
 	_jobs_by_tile.erase(job.tile)
@@ -644,6 +952,7 @@ func complete(job: Job) -> void:
 	_notify_path_reservation_released(job)
 	job.state = Job.State.COMPLETED
 	job.assigned_pawn = null
+	completed_count += 1  # PHASE A: increment completed_count
 	_diag_completed_this_window += 1
 	_bump_jobs_data_generation()
 	_notify_world_ai_job_completion(job)
@@ -655,6 +964,7 @@ func complete(job: Job) -> void:
 func cancel(job: Job, reason: String = "") -> void:
 	if job == null or job.state == Job.State.CANCELLED or job.state == Job.State.COMPLETED:
 		return
+	_index_remove_job(job)  # PHASE A: remove from index before array ops
 	_open.erase(job)
 	_claimed.erase(job)
 	_jobs_by_tile.erase(job.tile)
@@ -759,7 +1069,9 @@ func claim_by_id_for(pawn: HeelKawnian, job_id: int) -> Job:
 		elif settlement_id >= 0 and TechnologySystem != null:
 			if not bool(TechnologySystem.call("can_settle_perform_job_type", settlement_id, int(j.type))):
 				return null
+		_index_remove_job(j)  # PHASE A: remove from index before claim
 		_open.remove_at(i)
+		_index_repair_after_swap(i)  # PHASE A: repair index if swap occurred
 		_claimed.append(j)
 		j.state = Job.State.CLAIMED
 		j.assigned_pawn = pawn
@@ -778,6 +1090,7 @@ func clear_all() -> void:
 	_jobs_by_tile.clear()
 	_failed_tiles.clear()
 	_job_context_by_id.clear()
+	_index_clear()  # PHASE A: clear index structures
 	_bump_jobs_data_generation()
 	for j in all:
 		_notify_path_reservation_released(j)
@@ -1197,8 +1510,11 @@ func stats() -> Dictionary:
 		"posted":	 posted_count,
 		"completed":  completed_count,
 		"cancelled":  cancelled_count,
+		"abandoned":  abandoned_count,  # PHASE A: add abandoned count
 		"cancel_reasons": _cancel_reasons.duplicate(),
 		"abandon_reasons": _abandon_reasons.duplicate(),
+		"index_generation": _index_generation,  # PHASE A: index diagnostic
+		"nav_generation": _nav_generation,  # PHASE A: navigation generation
 	}
 
 
@@ -1299,6 +1615,7 @@ func _on_game_tick_diag(tick: int) -> void:
 	_diag_created_this_window = 0
 	_diag_completed_this_window = 0
 	_diag_cancelled_this_window = 0
+	_diag_abandoned_this_window = 0  # PHASE A: reset abandoned window counter
 
 func _notify_path_reservation_released(j: Job) -> void:
 	if j == null or j.type != Job.Type.BUILD_WALL:

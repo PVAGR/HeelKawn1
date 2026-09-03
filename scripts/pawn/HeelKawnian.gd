@@ -618,6 +618,9 @@ var _mv_logical_steps: int = 0
 var _mv_completions: int = 0
 var _mv_cancellations: int = 0
 var _mv_max_visual_desync_tiles: float = 0.0
+## MV-CANCEL: Source of the most recent cancellation ("draft", "teleport",
+## "nav_dirty", "panic_sleep", "job_lost", "replaced", "death", ...).
+var _mv_last_cancel_reason: String = ""
 
 ## Ticks remaining in the EATING state.
 var _eat_ticks_left: int = 0
@@ -2268,7 +2271,7 @@ func draft_goto(world_tile: Vector2i) -> void:
 	release_job_if_any()
 	_release_bed_if_reserved()
 	_target_zone = null
-	_clear_path()
+	_clear_path(true, "draft")
 	_state = State.DRAFT_WALK
 	if data.tile_pos == world_tile:
 		_state = State.IDLE
@@ -2298,7 +2301,7 @@ func autonomy_draft_goto(world_tile: Vector2i, purpose: String, peer_id: int = -
 	release_job_if_any()
 	_release_bed_if_reserved()
 	_target_zone = null
-	_clear_path()
+	_clear_path(true, "autonomy_draft")
 	_state = State.DRAFT_WALK
 	if data.tile_pos == world_tile:
 		_autonomy_draft_purpose = ""
@@ -3999,8 +4002,9 @@ func nudge_if_standing_on_solid() -> void:
 	var dest: Vector2i = _world.pathfinder.find_adjacent_passable(data.tile_pos)
 	if dest.x < 0:
 		return
-	_clear_path()
-	# P2-MOVEMENT-FIX: Reset movement accumulator and visual catch-up on teleport.
+	_clear_path(true, "teleport_nudge")
+	# MV-CANCEL: position is snapped to the destination below, so visual
+	# catch-up is explicitly disabled.
 	_sim_movement_accum = 0.0
 	_visual_catching_up = false
 	# Stuck pawns are never supposed to be mid-job on the tile that became
@@ -4033,8 +4037,9 @@ func evict_to_neighbor_of_tile(stand_tile: Vector2i) -> void:
 	var dest: Vector2i = _world.pathfinder.find_adjacent_passable(stand_tile)
 	if dest.x < 0:
 		return
-	_clear_path()
-	# P2-MOVEMENT-FIX: Reset movement accumulator and visual catch-up on teleport.
+	_clear_path(true, "teleport_evict")
+	# MV-CANCEL: position is snapped to the destination below, so visual
+	# catch-up is explicitly disabled.
 	_sim_movement_accum = 0.0
 	_visual_catching_up = false
 	# If we're standing on a build site, drop work so the site can be committed.
@@ -4101,7 +4106,7 @@ func _process_nav_dirty() -> void:
 					_world.release_bed(_reserved_bed, self)
 					_reserved_bed = Vector2i(-1, -1)
 					_state = State.IDLE
-					_clear_path()
+					_clear_path(true, "nav_dirty_bed")
 				else:
 					_state = State.GOING_TO_BED
 					_start_path(pbed)
@@ -4109,7 +4114,7 @@ func _process_nav_dirty() -> void:
 			_autonomy_draft_purpose = ""
 			_autonomy_draft_peer_id = -1
 			_state = State.IDLE
-			_clear_path()
+			_clear_path(true, "nav_dirty_draft")
 		_:
 			pass
 
@@ -4127,7 +4132,7 @@ func sanity_check_impassable_tile() -> void:
 # ==================== per-frame movement ====================
 
 func _process(delta: float) -> void:
-	if data == null or GameManager.is_paused:
+	if data == null or GameManager.is_paused or data.is_dead:
 		return
 
 	# P2-MOVEMENT-FIX: Visual catch-up mode. When the authoritative path has
@@ -4281,6 +4286,13 @@ func _refresh_movement_terrain_cache(tile: Vector2i) -> void:
 
 
 func _start_path(path: Array[Vector2i]) -> void:
+	# MV-CANCEL: Replacing an in-flight path discards its remaining steps.
+	# That is a cancellation of the old path, not a completion. Callers that
+	# already cleared via _clear_path(true) leave _path empty, so this does
+	# not double count.
+	if _path_index < _path.size():
+		_mv_cancellations += 1
+		_mv_last_cancel_reason = "replaced"
 	# P2-MOVEMENT-FIX: Reset movement accumulator on every new path.
 	# Credit from a previous path must never leak into the new one.
 	_sim_movement_accum = 0.0
@@ -4339,7 +4351,16 @@ func _advance_path() -> void:
 		_on_path_complete()
 
 
-func _clear_path() -> void:
+## MV-CANCEL: `count_cancelled` distinguishes completed paths (default false,
+## called from the _advance_path exhaustion branch) from cancelled or
+## invalidated paths (true — draft, teleport, nav change, panic sleep, job
+## loss, death, ...). A cancelled path discards unconsumed steps: it counts as
+## a cancellation, drops any movement credit, and hands the sprite a
+## presentation-only catch-up to the authoritative data.tile_pos so _process
+## keeps converging instead of being disabled while the sprite is stranded
+## behind the sim lane.
+func _clear_path(count_cancelled: bool = false, cancel_reason: String = "") -> void:
+	var had_pending_steps: bool = _path_index < _path.size()
 	_path = []
 	_path_index = 0
 	_target_tile = data.tile_pos if data != null else Vector2i.ZERO
@@ -4347,54 +4368,51 @@ func _clear_path() -> void:
 	# If the sprite hasn't caught up yet, _visual_catching_up will be true
 	# and _process will use _visual_catchup_target instead.
 	_target_world_pos = _world.tile_to_world(_target_tile) if _world != null and data != null else position
-	# Only disable _process if the sprite has converged. If still catching
-	# up, keep _process enabled so the sprite can interpolate to the target.
-	if not _visual_catching_up:
+	if count_cancelled:
+		if had_pending_steps:
+			_mv_cancellations += 1
+			_mv_last_cancel_reason = cancel_reason
+		# Cancelled movement credit never leaks into a later path.
+		_sim_movement_accum = 0.0
+		if _world != null and data != null:
+			_visual_catchup_target = _world.tile_to_world(data.tile_pos)
+			_visual_catching_up = true
+	# Keep _process alive while the sprite still needs to converge; disable it
+	# only once the visual position matches the authoritative tile.
+	if _visual_catching_up:
+		set_process(true)
+	else:
 		set_process(false)  # No movement needed — stop per-frame updates
 
 
-## P4: True arrival check for a claimed job. At high speed the frame-coupled
-## _process step can overshoot the exact work_tile (data.tile_pos lands on the
-## last path tile, which the pathfinder may set adjacent to the work tile).
-## Accept arrival when on the work tile OR the current tile is adjacent
-## (Chebyshev distance <= 1) to it, so a completed path to an adjacent final
-## tile is not misread as a spurious unclaim (which would bounce the pawn to
-## IDLE and prevent WALKING->WORKING observation at 200x).
-## P2-MOVEMENT-FIX: Returns true for job types whose target tile is
-## inherently impassable, requiring the pawn to work from an adjacent tile.
-## For these jobs, work_tile is set to an adjacent passable neighbor by
-## JobManager, but the pathfinder may still end the path one tile short.
-func _job_allows_adjacent_arrival() -> bool:
-	if _current_job == null:
-		return false
-	var jt: int = _current_job.type
-	# Jobs on impassable terrain/features — pawn works from adjacent tile
-	match jt:
-		Job.Type.MINE, Job.Type.MINE_WALL, Job.Type.CHOP, Job.Type.HUNT:
-			return true
-		Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR:
-			return true
-		Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_BARRACKS:
-			return true
-	return false
+## MV-DIAG: Bounded read-only movement diagnostics for the F10 debug menu.
+## Returns scalar copies only — never internal references — so callers cannot
+## mutate movement state. Fixed key set; cheap enough to aggregate per pawn.
+func get_movement_diagnostics() -> Dictionary:
+	return {
+		"path_starts": _mv_path_starts,
+		"logical_steps": _mv_logical_steps,
+		"completions": _mv_completions,
+		"cancellations": _mv_cancellations,
+		"last_cancel_reason": _mv_last_cancel_reason,
+		"max_visual_desync_tiles": snappedf(_mv_max_visual_desync_tiles, 0.1),
+		"visual_catching_up": _visual_catching_up,
+		"pending_steps": _path.size() - _path_index if _path_index < _path.size() else 0,
+	}
 
 
+## P4: True arrival check for a claimed job.
+## MV-WORKTILE: `job.work_tile` is the authoritative tile where the pawn must
+## stand — JobManager and job posters already resolve impassable physical
+## targets to an adjacent passable stand tile. Arrival is therefore exact; no
+## type-guessed adjacency or remote-work allowance. The pathfinder returns
+## exact-or-empty paths, so a non-empty path to work_tile ends ON work_tile;
+## a path redirected off work_tile (e.g. enemy-avoidance) ends short and the
+## pawn unclaims for a re-path instead of working remotely.
 func _pawn_at_work_tile() -> bool:
 	if _current_job == null or data == null:
 		return false
-	var wt: Vector2i = _current_job.work_tile
-	if data.tile_pos == wt:
-		return true
-	# P2-MOVEMENT-FIX: Only allow adjacent arrival for jobs whose target
-	# tile is inherently impassable (walls, ore veins, mountain edges).
-	# For all other jobs the pawn must arrive at work_tile exactly.
-	# work_tile is already set to an adjacent passable neighbor for
-	# impassable-target jobs by JobManager, so exact arrival is correct.
-	if _job_allows_adjacent_arrival():
-		var dx: int = data.tile_pos.x - wt.x
-		var dy: int = data.tile_pos.y - wt.y
-		return absi(dx) <= 1 and absi(dy) <= 1
-	return false
+	return data.tile_pos == _current_job.work_tile
 
 
 func _on_path_complete() -> void:
@@ -5858,7 +5876,7 @@ func _force_panic_sleep() -> void:
 		JobManager.abandon(jp)
 		_current_job = null
 		_clear_cohort_state()
-	_clear_path()
+	_clear_path(true, "panic_sleep")
 	# If we were already walking to a bed when panic hit, give up the
 	# reservation so other pawns can use it; we're sleeping where we stand.
 	_release_bed_if_reserved()
@@ -7104,7 +7122,7 @@ func _tick_walking() -> void:
 		return
 	if _current_job == null:
 		_state = State.IDLE
-		_clear_path()
+		_clear_path(true, "job_lost")
 		return
 	if not _is_job_tile_still_valid(_current_job):
 		# Harvest jobs: resource gone, cancel permanently. Build jobs: unclaim so they can be retried.
@@ -7603,7 +7621,7 @@ func _begin_job(job: Job) -> void:
 ## arrival. Used by both the initial _begin_job and the post-fetch handoff.
 func _walk_to_work_tile(job: Job) -> void:
 	if data.tile_pos == job.work_tile:
-		_clear_path()
+		_clear_path(true, "already_at_work_tile")
 		_state = State.WORKING
 		_request_redraw()
 		return
@@ -8429,7 +8447,7 @@ func _complete_current_job() -> void:
 	_clear_cohort_state()
 	_current_job = null
 	_state = State.IDLE   # reset before transitioning; _begin_haul will set it
-	_clear_path()
+	_clear_path(true, "job_done_cleanup")
 	_request_redraw()
 	# Evaluate life-path contribution on every completed job.
 	_evaluate_life_path_on_job_complete(job.type)
@@ -8978,7 +8996,7 @@ func _reset_to_idle() -> void:
 	_staged_build_materials.clear()
 	_direct_gather_item = -1
 	_state = State.IDLE
-	_clear_path()
+	_clear_path(true, "reset_idle")
 	_request_redraw()
 
 
@@ -9141,7 +9159,7 @@ func _deposit_at_stockpile() -> void:
 		JobManager.complete(j_done)
 	_current_job = null
 	_state = State.IDLE
-	_clear_path()
+	_clear_path(true, "haul_done_cleanup")
 	_request_redraw()
 
 
@@ -9783,7 +9801,7 @@ func _arrive_at_bed() -> void:
 
 func _begin_sleeping() -> void:
 	_state = State.SLEEPING
-	_clear_path()
+	_clear_path(true, "sleep")
 	_request_redraw()
 	# `where` string for logs could be re-added if verbose_logs are re-enabled.
 	# var on_bed: bool = _reserved_bed.x >= 0 and data.tile_pos == _reserved_bed
@@ -11811,7 +11829,7 @@ func _tick_fleeing() -> void:
 	
 	if not danger_nearby:
 		# Safe now, return to idle
-		_clear_path()
+		_clear_path(true, "flee_safe")
 		_state = State.IDLE
 		if GameManager.verbose_logs():
 			print("[HeelKawnian] %s reached safety" % data.display_name)
@@ -11890,6 +11908,12 @@ func _die(_p_cause: String = "") -> void:
 	# Release any held job and bed reservation
 	release_job_if_any()
 	_release_bed_if_reserved()
+
+	# MV-CANCEL: Death abandons any in-flight movement (counted as a
+	# cancellation, credit dropped) and stops the visual lane entirely —
+	# this node must not keep interpolating after death.
+	_clear_path(true, "death")
+	set_process(false)
 
 	# ARCHITECT T006: Unregister pawn from SpatialManager upon death
 	if SpatialManager != null and data != null:

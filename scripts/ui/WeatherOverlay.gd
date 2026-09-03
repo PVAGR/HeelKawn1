@@ -31,7 +31,6 @@ var _current_weather: String = ""
 var _fog_image: Image = null
 var _fog_texture: ImageTexture = null
 var _fog_sprite: Sprite2D = null
-var _fog_dirty: bool = false
 var _refresh_interval: int = REFRESH_EVERY_N_TICKS
 var _mobile_runtime: bool = false
 
@@ -147,22 +146,39 @@ func _update_weather() -> void:
 	_embers.emitting = (target == "embers")
 
 
-## Update fog of war overlay: darken undiscovered tiles
+## Update fog of war overlay: darken undiscovered tiles.
+## Each refresh recomputes the darkness for the whole image from the
+## AUTHORITATIVE FogOfDiscovery state: we reset the sprite fully transparent and
+## re-darken only undiscovered tiles inside the camera window. This guarantees
+## there is NO stale/accumulative darkness — a discovered tile can never keep a
+## dark pixel, no pixel leaks in from a previous frame, and a new load / restart /
+## new-day cannot retain an old dark overlay. The full-image transparent fill is a
+## single fast op; the per-tile re-darken stays bounded to the camera window.
 func _update_fog() -> void:
 	if _world == null or _world.data == null:
 		return
 	if _fog_image == null:
 		return
-	var fog_refresh_mod: int = _refresh_interval * (15 if _mobile_runtime else 10)
-	if not _fog_dirty and _tick_counter % fog_refresh_mod != 0:
+	# Bounded cadence: rebuild the authoritative darkness a few times per second.
+	# `_tick_counter` is a per-frame counter (NOT game-speed coupled), so this
+	# cadence is stable in real time at every speed.
+	var fog_refresh_mod: int = _refresh_interval * 8
+	if _tick_counter % fog_refresh_mod != 0:
 		return
-	_fog_dirty = false
 	var fog: Node = get_node_or_null("/root/FogOfDiscovery")
 	if fog == null:
+		# No authoritative discovery source -> no darkness at all (fog must not
+		# become a permanent blind). Clear to transparent.
+		if _fog_image.get_pixel(0, 0).a != 0.0:
+			_fog_image.fill(Color(0, 0, 0, 0))
+			_fog_texture.update(_fog_image)
 		return
 	var cam_tile: Vector2i = _world.world_to_tile(_camera.global_position) if _camera != null else Vector2i(128, 128)
 	var view_radius: int = 10 if _mobile_runtime else 15
-	# Only update tiles near camera for performance
+	# Authoritative reset: every refresh starts from a clean transparent image so
+	# darkness is always derived fresh from discovery state, never accumulated.
+	_fog_image.fill(Color(0, 0, 0, 0))
+	# Darken only undiscovered tiles near the camera (performance-bounded).
 	for dx in range(-view_radius, view_radius + 1):
 		for dy in range(-view_radius, view_radius + 1):
 			var tx: int = cam_tile.x + dx
@@ -172,10 +188,8 @@ func _update_fog() -> void:
 			var discovered: bool = false
 			if fog.has_method("is_discovered"):
 				discovered = fog.call("is_discovered", tx, ty)
-			var alpha: float = 0.0 if discovered else 0.65
-			var current: Color = _fog_image.get_pixel(tx, ty)
-			if abs(current.a - alpha) > 0.01:
-				_fog_image.set_pixel(tx, ty, Color(0, 0, 0, alpha))
+			if not discovered:
+				_fog_image.set_pixel(tx, ty, Color(0, 0, 0, 0.65))
 	_fog_texture.update(_fog_image)
 
 

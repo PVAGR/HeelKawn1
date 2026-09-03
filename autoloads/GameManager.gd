@@ -237,7 +237,51 @@ func _format_game_tick_callable(cb: Callable, ordinal: int, total: int) -> Strin
 	return "[%d/%d] %s :: %s" % [ordinal, total, str(obj), mid_str]
 
 
-## Freeze the current [signal game_tick] listener set for one tick and prepare
+## Robust invokability guard for a [signal game_tick] listener Callable.
+## [method Callable.is_valid] alone is NOT sufficient: a Callable whose bound
+## object was freed / queued for deletion (or nulled by the engine) can still
+## round-trip [code]is_valid() == true[/code], and invoking it is exactly what
+## produced the "Attempt to call function 'null::_on_game_tick (Callable)' on a
+## null instance" crash (TickManager._run_one_callback -> GameManager.game_tick_step).
+## Checks structural validity, a non-null live object, node/refcount liveness, and
+## that the bound method still exists on the target.
+func _is_game_tick_cb_invokable(cb: Callable) -> bool:
+	if not cb.is_valid():
+		return false
+	var obj: Object = cb.get_object()
+	if obj == null:
+		return false
+	if not is_instance_valid(obj):
+		return false
+	if obj is Node and (obj as Node).is_queued_for_deletion():
+		return false
+	var m: StringName = cb.get_method()
+	if m == StringName():
+		return false
+	if not obj.has_method(m):
+		return false
+	return true
+
+
+## Remove a stale [signal game_tick] listener from the PERSISTENT signal so it
+## cannot re-enter future dispatches. Does NOT touch the active snapshot — callers
+## remove from the snapshot at their own exact cursor to guarantee no listener is
+## skipped or double-called. Disconnect is guarded: a freed / null-object Callable
+## that `disconnect` cannot address natively is skipped (the engine auto-severs
+## connections of really-freed objects; our snapshot guard handles the window).
+func _prune_stale_game_tick_cb(cb: Callable) -> void:
+	var obj: Object = cb.get_object()
+	if obj == null:
+		return
+	if not is_instance_valid(obj):
+		return
+	if obj is Node and (obj as Node).is_queued_for_deletion():
+		return
+	if game_tick.is_connected(cb):
+		game_tick.disconnect(cb)
+
+
+
 ## the resumable cascade. Called by TickManager at sim-tick start (scheduler
 ## phase 3). Also sets [member tick_count] so game_tick listeners read the
 ## current tick exactly as the previous synchronous path did.
@@ -255,7 +299,10 @@ func begin_game_tick_dispatch(tick: int) -> void:
 		if not cb_var is Callable:
 			continue
 		var cb: Callable = cb_var as Callable
-		if not cb.is_valid():
+		# Prune stale (freed / queued-for-deletion / null-object) callables at
+		# snapshot time so a freed listener cannot be retained into the dispatch.
+		if not _is_game_tick_cb_invokable(cb):
+			_prune_stale_game_tick_cb(cb)
 			continue
 		_gt_pending_slots.append(cb)
 	tick_count = tick
@@ -274,6 +321,22 @@ func game_tick_step(_tick: int) -> bool:
 			_gt_pending_ct_slots = false
 		return false
 	var cb: Callable = _gt_pending_slots[_gt_pending_index]
+	# Staleness guard: if this listener's target was freed / queued for deletion /
+	# nulled since the snapshot was taken, prune it at the CURRENT index (so the
+	# next valid listener shifts into place and is NOT skipped / double-called)
+	# and continue the cascade. Never invoke a freed-object Callable.
+	if not _is_game_tick_cb_invokable(cb):
+		if trace_game_tick_dispatch:
+			print("[GameManager] game_tick(%d) prune stale listener %s" % [_gt_pending_tick, _format_game_tick_callable(cb, _gt_pending_index + 1, _gt_pending_slots.size())])
+		_prune_stale_game_tick_cb(cb)
+		_gt_pending_slots.pop_at(_gt_pending_index)
+		if _gt_pending_slots.is_empty():
+			_gt_pending_active = false
+			if _gt_pending_ct_slots and _gt_pending_tick >= 0:
+				CrashTrap.log_tick_event("dispatch_end", "processed %d listeners (pruned)" % 0)
+				_gt_pending_ct_slots = false
+			return false
+		return true
 	var label: String = _format_game_tick_callable(cb, _gt_pending_index + 1, _gt_pending_slots.size())
 	last_game_tick_listener_label = label
 	if trace_game_tick_dispatch:
@@ -362,7 +425,10 @@ func _dispatch_game_tick(tick: int) -> void:
 		if not cb_var is Callable:
 			continue
 		var cb: Callable = cb_var as Callable
-		if not cb.is_valid():
+		# Prune stale (freed / queued-for-deletion / null-object) callables so the
+		# synchronous fallback never invokes a freed listener either.
+		if not _is_game_tick_cb_invokable(cb):
+			_prune_stale_game_tick_cb(cb)
 			continue
 		_slots_cache.append(cb)
 		n += 1
@@ -371,6 +437,9 @@ func _dispatch_game_tick(tick: int) -> void:
 		CrashTrap.log_tick_event("dispatch_start", "tick=%d listeners=%d" % [tick, n])
 	for idx in range(n):
 		var cb2: Callable = slots[idx]
+		if not _is_game_tick_cb_invokable(cb2):
+			_prune_stale_game_tick_cb(cb2)
+			continue
 		var label: String = _format_game_tick_callable(cb2, idx + 1, n)
 		last_game_tick_listener_label = label
 		if trace_game_tick_dispatch:

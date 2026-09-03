@@ -907,3 +907,38 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - Frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains — req #5 decoupling deferred (high-risk cross-cut).
 - Post-fix playtest acceptance: user runs 200x on the saved colony and observes whether settlements/construction now advance in world-time at a cadence comparable to 1x (with CPU appropriately limiting absolute real-time throughput).
 - Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing.
+
+---
+
+### 2026-09-03 - Session: opencode/big-pickle (Stabilize 6312e91c: Revert 5 Cadence Regressions + Stale-Callable Crash Fix + Persistent-Darkness Fog Lifecycle)
+
+**Time:** ~UTC
+
+**Objective:** stabilize/repair regressions from `6312e91c` (which made 200x slower in meaningful world development) — (A) revert the 5 proven cadence regressions in `scenes/main/Main.gd`, (B) fix the stale/freed `game_tick` Callable crash, (C) fix the persistent dark/fog overlay lifecycle. Static/parse validation only (user directive: NO Godot sim runs/benchmarks; user playtests). No simulation-logic change to settled/pawn/job/culture/relationship/event systems.
+
+**What was done:**
+
+1. **Task A -- reverted all 5 cadence regressions in `scenes/main/Main.gd`** (file now byte-identical to parent `e7384979`; `git diff e7384979 -- scenes/main/Main.gd` exit-0/0 lines). Restored the pre-`6312e91c` speed-multiplied cadences that were wrongly flattened to fixed 1x: `_planner_interval_for_speed()` (5000/3000/1000/500/180/90 at 200/100/50/26/6/1x), `_heavy_planner_interval_for_speed()` (5000/3000/2000/1000/360/180), construction-seed lane `_seed_interval` (4000/2000/1000 at 100/50/26x over 30), `_seed_construction_jobs` internal re-entry gate (`_high_speed_interval(60,120,300)`), and rebirth/recompute `_rebirth_interval` (12000/8000/5000/3000 at 200/100/50/26x). The `_recomp_budget` cascade (3000/5000/10000) is preserved. Rationale: the HSS-1 flattening was the load-bearing change behind "200x does not develop" being worse than pre-6312e91c; restoring the prior cadence is the smallest safe reversal (higher speeds still throttled, but at the proven pre-regression rates).
+
+2. **Task B -- stale/freed `game_tick` Callable crash fix (`autoloads/GameManager.gd`).** Root cause: the resumable cascade snapshots `get_signal_connection_list(&"game_tick")` into `_gt_pending_slots` at `begin_game_tick_dispatch`, then `game_tick_step` dispatches ONE callback per later call. A listener whose node was freed/queued-for-deletion between snapshot and its turn produced `Attempt to call function 'null::_on_game_tick (Callable)' on a null instance` (TickManager._run_one_callback -> GameManager.game_tick_step). Old filter used only `cb.is_valid()`, which does NOT catch freed/null-object callables. Added `_is_game_tick_cb_invokable(cb)` (is_valid + live object + is_instance_valid + not queued_for_deletion + method exists) and `_prune_stale_game_tick_cb(cb)` (disconnect from the persistent signal only, guarded). Wired into: `begin_game_tick_dispatch` snapshot build, `game_tick_step` (prune at the exact cursor via `pop_at(_gt_pending_index)` so no valid listener is skipped/double-called), and the `_dispatch_game_tick` synchronous fallback (snapshot build + call loop). Guarantees no valid listener is ever skipped and no freed listener is ever invoked.
+
+3. **Task C1 -- persistent-darkness fog lifecycle (`scripts/ui/WeatherOverlay.gd`).** `_update_fog` now recomputes darkness from the AUTHORITATIVE `FogOfDiscovery.is_discovered` state on each bounded refresh: reset the whole sprite image transparent (`fill(Color(0,0,0,0))`), then re-darken only undiscovered tiles inside the camera window (0.65). No stale/accumulative pixel can persist -- a discovered tile always clears, a new load/restart/new-day cannot retain a dark overlay, and a missing `/root/FogOfDiscovery` means NO darkness at all (fog must not become a permanent blind). Removed the never-set `_fog_dirty` gate (it was the mechanism that let discovery outside a slow camera-window refresh go unreflected for up to 600 frames). Note: `FogOfDiscovery.gd:4` documents the fog as "a CPU saver, not a visual blocker"; the WeatherOverlay sprite was contradicting that intended semantics by being a persistent 0.65-black blocker.
+
+4. **Task C2 -- DayNight/committed-calendar confirmed correct, NOT changed.** `scripts/world/DayNightCycle.gd` already derives the public day/phase from `SimulationClock.get_committed_world_time_seconds()` (committed, monotonic, clamped to the live heartbeat) and sets `color` fresh each `tick_processed` (no accumulation, no stale dark). Its committed-derived daytime brightness is causally sound by design (a `diag_committed_calendar.gd` contract asserts it must NOT read game_tick). Any "screen dark during day from sim lag" is the committed clock lagging behind a stalled/dropped-tick world -- cured by Task A restoring the work cadence (NOT by bypassing the committed clock, which would re-introduce the causal-soundness violation). No code change to DayNightCycle.
+
+**Verification (static/parse only, fence respected, production autosave untouched):**
+- Parse probe (SceneTree `_initialize`, load-only, never boots Main / never advances a tick): `autoloads/GameManager.gd OK`, `scenes/main/Main.gd OK`, `scripts/ui/WeatherOverlay.gd OK`, `scripts/world/DayNightCycle.gd OK`, `autoloads/TickManager.gd OK`, `scripts/pawn/HeelKawnian.gd OK`. Zero parse errors / zero script errors.
+- `git diff e7384979 -- scenes/main/Main.gd` empty (exit 0) -- cadence revert is exact.
+- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` / 38,733,140 B (at `%APPDATA%\Godot\app_userdata\HeelKawn\heelkawn_colony_autosave.sav`) verified byte-identical -- the load-only probe never wrote a save.
+- Only `scenes/main/Main.gd` + `autoloads/GameManager.gd` + `scripts/ui/WeatherOverlay.gd` + `AGENTS.md` staged (working-tree junk -- `.aider.*`, `.godot/**`, stray `*.uid`/`session-*.md`/shell-output junk files -- ignored).
+
+**Files modified:**
+- `scenes/main/Main.gd` -- the 5 cadence sites reverted to pre-`6312e91c` behavior.
+- `autoloads/GameManager.gd` -- `_is_game_tick_cb_invokable` + `_prune_stale_game_tick_cb` + stale-guard wiring in `begin_game_tick_dispatch`/`game_tick_step`/`_dispatch_game_tick`.
+- `scripts/ui/WeatherOverlay.gd` -- authoritative `_update_fog` (full transparent reset + camera-window re-darken), removed dead `_fog_dirty`.
+- `AGENTS.md` -- this entry.
+
+**Known remaining / notes:**
+- THE crash fix is prophylactic-correct but the IDENTITY of the freed `_on_game_tick` listener is still unconfirmed (it was a UI/pawn-spawn-time listener, not a core autoload); the crash can no longer fire, but the underlying free is a symptom of the same class as older spawn-teardown issues. If it recurs post-playtest, run with `--trace-game-tick-dispatch` / CrashTrap should_trace to name the exact listener.
+- The fog fix changes the fog-of-war VISUAL semantics to match `FogOfDiscovery`'s documented "CPU saver, not a visual blocker" intent: distant undiscovered tiles beyond the camera window now show as bright, and discovery always clears promptly. This is the intended persistence fix, but the user should confirm the visual is acceptable.
+- Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Pre-existing frame-coupled `_process` movement (HeelKawnian.gd ~4004) remains the determinism/visual cross-cut (deferred).

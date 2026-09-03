@@ -2837,6 +2837,16 @@ func _snapshot_text(snapshot_dict: Dictionary) -> String:
 	lines.append(_get_anomalies_section(snapshot_dict))
 	lines.append("")
 	lines.append(_get_recent_changes_section(snapshot_dict))
+	# Hard line cap: never exceed 300 lines in the snapshot to prevent
+	# console/print overflow (Godot's [output overflow] at ~2MB).
+	const MAX_SNAPSHOT_LINES: int = 300
+	if lines.size() > MAX_SNAPSHOT_LINES:
+		var truncated: PackedStringArray = PackedStringArray()
+		for i in range(MAX_SNAPSHOT_LINES - 3):
+			truncated.append(lines[i])
+		truncated.append("... [truncated at %d lines of %d total]" % [MAX_SNAPSHOT_LINES, lines.size()])
+		truncated.append("End of HEELKAWN AI WORLD SNAPSHOT (truncated)")
+		return "\n".join(truncated)
 	return "\n".join(lines)
 
 func _to_json(snapshot_dict: Dictionary) -> String:
@@ -2936,13 +2946,16 @@ func _build_performance_dict() -> Dictionary:
 	
 	# TickProfiler counters
 	if TickProfiler != null:
+		var profiler_enabled: bool = TickProfiler.get("_profile_sim_enabled") == true
+		performance["tickprofiler_available"] = profiler_enabled
+		performance["tickprofiler_measurement_scope"] = "deep (--profile-sim active)" if profiler_enabled else "deep DISABLED (passive zeros; run with --profile-sim for per-pawn timing)"
 		var profiler_fields := [
 			"cat_total_heelkawnian", "cat_bookkeeping", "cat_needs", "cat_survival_health",
 			"cat_cognition", "cat_awareness", "cat_matrix_ai", "cat_social", "cat_household",
 			"cat_settlement", "cat_state_dispatch", "cat_misc", "cat_ai_total", "cat_main_dispatch"
 		]
 		for field in profiler_fields:
-			if TickProfiler.has_method(field):
+			if TickProfiler.get(field) is int:
 				var value = TickProfiler.get(field)
 				performance["tickprofiler"][field] = {
 					"us": value if value is int else 0,
@@ -3718,8 +3731,11 @@ func _get_engine_section(snapshot: Dictionary) -> String:
 	lines.append("")
 	
 	var tickprofiler = performance.get("tickprofiler", {})
-	if tickprofiler:
-		lines.append("TickProfiler (us/ms):")
+	var profiler_scope: String = str(performance.get("tickprofiler_measurement_scope", ""))
+	if not profiler_scope.is_empty():
+		lines.append("Profiler Scope: %s" % profiler_scope)
+	if tickprofiler and tickprofiler is Dictionary and not tickprofiler.is_empty():
+		lines.append("TickProfiler (cumulative window us/ms):")
 		var sorted_cats := []
 		for cat in tickprofiler:
 			var data = tickprofiler[cat]

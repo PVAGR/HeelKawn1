@@ -145,17 +145,18 @@ func _build_relationship_summary(from_id: int, to_id: int) -> String:
 
 
 func _calculate_power_balance(from_id: int, to_id: int) -> String:
-	# Would calculate relative power (population, military, resources)
-	# For now, return placeholder
-	
 	var scenarios: Array[String] = [
 		"{from} is stronger militarily",
 		"{to} has economic advantage",
 		"Roughly equal power",
 		"{from} has defensive advantage"
 	]
-	
-	return scenarios[randi() % scenarios.size()]
+	var idx: int = 0
+	if WorldRNG != null and WorldRNG.has_method("index_for"):
+		idx = WorldRNG.index_for(&"ai_diplomacy_power_%d_%d" % [int(from_id), int(to_id)], scenarios.size(), int(from_id) * 31 + int(to_id))
+	else:
+		idx = (int(from_id) * 31 + int(to_id) * 7) % scenarios.size()
+	return scenarios[idx].format({"from": from_id, "to": to_id})
 
 
 func _execute_diplomatic_action(relation: Dictionary, action: Dictionary) -> void:

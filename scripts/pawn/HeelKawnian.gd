@@ -416,6 +416,14 @@ func _pawn_salt(extra: int = 0) -> int:
 	return GameManager.tick_count + pawn_id * 1009 + tile.x * 131 + tile.y * 17 + extra
 
 
+## CULTURAL-EVENT SPAM CONTROL: a per-pawn, per-custom cooldown so a pawn idling in
+## a foreign custom region does not flood WorldMemory/Chronicle with identical
+## "cultural_exposure" events. Keyed by pawn_id -> {custom_tag -> last_emit_tick}.
+## Pure tick-based dedup; no RNG, no frame coupling.
+const CULTURAL_EXPOSURE_DEDUP_TICKS: int = 1200
+static var _cultural_exposure_last_emit: Dictionary = {}
+
+
 ## Stable 0..1 facets per pawn (world_seed + id). Makes metabolism, rest habits,
 ## wanderlust, and job tastes diverge so the colony does not move as one machine.
 var _behavior_profile: PackedFloat32Array = PackedFloat32Array()
@@ -3507,16 +3515,34 @@ func _maybe_absorb_custom() -> void:
 	# Deterministic chance: 10% per check (every 100 ticks = ~1.8% per in-world day)
 	if not WorldRNG.chance_for(_pawn_stream("custom_absorb"), 0.10, _pawn_salt(17)):
 		return
-	# Record cultural exposure event
+	# Dedup: a pawn absorbs one custom at a time; avoid re-emitting the same
+	# (pawn, custom) cultural_exposure event within the dedup window.
+	var pawn_key: int = int(data.id)
+	var custom_tag: String = active_customs[0]
+	var now_tick: int = GameManager.tick_count
+	var pawn_emits: Dictionary = _cultural_exposure_last_emit.get(pawn_key, {})
+	var last_tick: int = int(pawn_emits.get(custom_tag, -1))
+	if now_tick - last_tick < CULTURAL_EXPOSURE_DEDUP_TICKS:
+		return
+	pawn_emits[custom_tag] = now_tick
+	_cultural_exposure_last_emit[pawn_key] = pawn_emits
+	# Record cultural exposure event (compact payload — scalar facts only, never
+	# the full settlement dict, which produced huge chronicle payloads/overflow).
+	var from_settlement_id: int = -1
+	var from_settlement_name: String = ""
+	if region_settlement != null and region_settlement is Dictionary:
+		from_settlement_id = int((region_settlement as Dictionary).get("center_region", -1))
+		from_settlement_name = str((region_settlement as Dictionary).get("name", (region_settlement as Dictionary).get("polity_display_name", "")))
 	WorldMemory.record_event({
 		"type": "cultural_exposure",
 		"k": WorldMemory.Kind.TEACHING_EVENT,  # Reuse teaching kind for knowledge transmission
 		"r": rk,
-		"t": GameManager.tick_count,
-		"pawn_id": int(data.id),
-		"custom_tag": active_customs[0],  # Absorb one custom at a time
-		"from_settlement": region_settlement,
-		"to_settlement": pawn_settlement,
+		"t": now_tick,
+		"pawn_id": pawn_key,
+		"custom_tag": custom_tag,  # Absorb one custom at a time
+		"from_settlement_id": from_settlement_id,
+		"from_settlement_name": from_settlement_name,
+		"to_settlement_id": pawn_settlement,
 	})
 
 

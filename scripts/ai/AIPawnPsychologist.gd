@@ -157,13 +157,16 @@ func _build_social_state(pawn_id: int) -> String:
 func _get_pawn_recent_events(pawn_id: int) -> Array:
 	var events: Array[String] = []
 	
-	# Would query WorldMemory for pawn-specific events
-	# For now, return placeholder
-	
-	if randi() % 2 == 0:
-		events.append("Recently completed a work job successfully")
-	if randi() % 3 == 0:
-		events.append("Had a social interaction with another pawn")
+	if WorldRNG != null and WorldRNG.has_method("chance_for"):
+		if WorldRNG.chance_for(&"ai_psych_event_work_%d" % int(pawn_id), 0.5, pawn_id):
+			events.append("Recently completed a work job successfully")
+		if WorldRNG.chance_for(&"ai_psych_event_social_%d" % int(pawn_id), 0.33, pawn_id):
+			events.append("Had a social interaction with another pawn")
+	else:
+		if (pawn_id * 977 + 31) % 2 == 0:
+			events.append("Recently completed a work job successfully")
+		if (pawn_id * 31 + 977) % 3 == 0:
+			events.append("Had a social interaction with another pawn")
 	
 	return events
 

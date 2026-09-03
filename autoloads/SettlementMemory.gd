@@ -817,11 +817,54 @@ func _apply_guild_settlement_gate(world: World) -> void:
 		if guild_pawns.size() < MIN_GUILD_SIZE_FOR_SETTLEMENT:
 			guild_pawns = _guild_pawns_near_center(center_tile, guild_pawns)
 		var gate: Dictionary = describe_formal_settlement_gate(center_tile, guild_pawns, world)
+		# FIX P5a: If center is unwalkable, scan nearby walkable tiles in the
+		# region as fallback center. The geometric center of a 16x16 region can
+		# land on a solid tile (mountain/water/wall), blocking formalization
+		# even with 20 pawns + hearth. Scan expanding Chebyshev distance.
+		if str(gate.get("reason", "")) == "center_not_walkable" and world != null and is_instance_valid(world):
+			var pf_fallback: PathFinder = world.pathfinder if world.pathfinder != null else null
+			if pf_fallback != null:
+				var rx: int = center_rk & 0xFFFF
+				var ry: int = (center_rk >> 16) & 0xFFFF
+				var region_origin: Vector2i = Vector2i(rx * 16, ry * 16)
+				var fallback_found: bool = false
+				for dist in range(1, 8):
+					for dy in range(-dist, dist + 1):
+						for dx in range(-dist, dist + 1):
+							if absi(dx) != dist and absi(dy) != dist:
+								continue
+							var candidate: Vector2i = region_origin + Vector2i(8 + dx, 8 + dy)
+							if candidate.x < 0 or candidate.y < 0:
+								continue
+							if pf_fallback.component_of(candidate) >= 0:
+								gate = describe_formal_settlement_gate(candidate, guild_pawns, world)
+								center_tile = candidate
+								fallback_found = true
+								break
+						if fallback_found:
+							break
+					if fallback_found:
+						break
 		var allowed: bool = bool(gate.get("allowed", false))
 		if not allowed:
 			var infra_gate: Dictionary = describe_infrastructure_formal_gate(st, center_tile)
 			if bool(infra_gate.get("allowed", false)):
 				allowed = true
+				# FIX P5b: Populate member_ids from living pawns so formal
+				# settlements don't get empty member_pawn_ids when formalized
+				# via the infrastructure gate (which doesn't set member_ids).
+				var infra_member_ids: Array = []
+				for p_any in guild_pawns:
+					if p_any is HeelKawnian and p_any != null and is_instance_valid(p_any) and p_any.data != null:
+						infra_member_ids.append(int(p_any.data.id))
+				if infra_member_ids.is_empty():
+					for p_any in _living_pawns():
+						if p_any is HeelKawnian and p_any != null and is_instance_valid(p_any) and p_any.data != null:
+							var pawn_rk: int = WorldMemory._region_key(p_any.data.tile_pos.x, p_any.data.tile_pos.y)
+							if pawn_rk == center_rk:
+								infra_member_ids.append(int(p_any.data.id))
+				infra_gate["member_ids"] = infra_member_ids
+				infra_gate["member_count"] = maxi(infra_member_ids.size(), int(infra_gate.get("member_count", 0)))
 				gate = infra_gate
 		st["member_pawn_ids"] = _array_to_packed_int32(gate.get("member_ids", []))
 		st["guild_member_count"] = int(gate.get("member_count", 0))

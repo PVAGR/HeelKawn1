@@ -867,27 +867,27 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 
 ---
 
-### 2026-09-03 � Session: opencode/big-pickle (High-Speed Simulation Pass HSS-1: Remove Speed-Based Development Suppression + Resource-Truth/Overlay Clarification)
+### 2026-09-03 � Session: opencode/big-pickle (High-Speed Simulation Pass HSS-1: Remove Speed-Based Development Suppression + Resource-Truth/Overlay Clarification)
 
 **Time:** ~UTC
 
-**Objective (from task):** make 200x perform the same world work (construction, settlement development, resource processing, jobs) as slower speeds, only faster for the observer � not a presentation-only calendar fix. User directive: NO Godot runs / no headless sims / no gameplay tests � static + parse validation only; user playtests. Commit + push + report.
+**Objective (from task):** make 200x perform the same world work (construction, settlement development, resource processing, jobs) as slower speeds, only faster for the observer � not a presentation-only calendar fix. User directive: NO Godot runs / no headless sims / no gameplay tests � static + parse validation only; user playtests. Commit + push + report.
 
 **Real throughput & starvation causes (root cause):**
-1. **CPU envelope is the hard ceiling.** At 200x, `sim_delta=3.33s/frame` demands ~66 compat ticks/frame, each 20-57ms of CPU, yet the frame budget `SIM_SLICE_BUDGET_USEC=6000us` is 6ms. It is physically impossible to replay 66 full normal ticks in 6ms. The simulator cannot complete the requested 200x work by replaying every tick � that is arithmetic, not a scheduling bug. True 200x full-tick replay requires coalescing/batching (deferred, see below).
-2. **Development suppression (THE fixable lever, this session).** Even when a tick DID complete, the settlement-development systems were gated by speed-multiplied tick intervals so they ran ~1/50th as often per unit world-time: `_planner_interval_for_speed()` returned 5000 at 200x (vs 90 at 1x), `_heavy_planner_interval_for_speed()` 5000 (vs 180), construction-seed lane interval 4000 (vs 30), AND `_seed_construction_jobs`' internal re-entry gate `_high_speed_interval(60,120,300)`=600 (vs 30) which alone skipped ~95% of seeds even when the lane fired. `REBIRTH_CHECK_INTERVAL_TICKS` grew 4000?12000. Net effect: at 200x, settlements and construction effectively froze development even though day/tick advanced � the exact "calendar advances but the world does not develop" symptom.
+1. **CPU envelope is the hard ceiling.** At 200x, `sim_delta=3.33s/frame` demands ~66 compat ticks/frame, each 20-57ms of CPU, yet the frame budget `SIM_SLICE_BUDGET_USEC=6000us` is 6ms. It is physically impossible to replay 66 full normal ticks in 6ms. The simulator cannot complete the requested 200x work by replaying every tick � that is arithmetic, not a scheduling bug. True 200x full-tick replay requires coalescing/batching (deferred, see below).
+2. **Development suppression (THE fixable lever, this session).** Even when a tick DID complete, the settlement-development systems were gated by speed-multiplied tick intervals so they ran ~1/50th as often per unit world-time: `_planner_interval_for_speed()` returned 5000 at 200x (vs 90 at 1x), `_heavy_planner_interval_for_speed()` 5000 (vs 180), construction-seed lane interval 4000 (vs 30), AND `_seed_construction_jobs`' internal re-entry gate `_high_speed_interval(60,120,300)`=600 (vs 30) which alone skipped ~95% of seeds even when the lane fired. `REBIRTH_CHECK_INTERVAL_TICKS` grew 4000?12000. Net effect: at 200x, settlements and construction effectively froze development even though day/tick advanced � the exact "calendar advances but the world does not develop" symptom.
 3. **`waiting_for_first_resource_truth_tick` is a diagnostic-overlay placeholder, NOT a real pawn stall.** The string exists ONLY as a default in the PHASE8 proof overlay (`Main.gd`, `_phase8_proof_overlay_text`): when `SettlementMemory.get_phase8_proof_terminal_line()` returns empty, the overlay shows `[PHASE8_PROOF_BUNDLE] waiting_for_first_resource_truth_tick...` (Main.gd:5001). The underlying resource-truth producer `SettlementMemory.refresh_resource_truth()` (Main callback at :3200-3203) runs at fixed-500 tick cadence (or per-tick when `validation_truth_verify_armed()`), NOT gated by `_tick_budget_exceeded`, NOT speed-multiplied. So resource-truth delivery (req #1) was never starved; the overlay text was the false "stall" signal.
 
 **What was done (all in `scenes/main/Main.gd`, skill + parse-verified):**
 1. **Removed the speed multiplier on the settlement planner cadence (req #3).** `_planner_interval_for_speed()` ? fixed `return 90`; `_heavy_planner_interval_for_speed()` ? fixed `return 180`. Justification: one compat tick == the same 0.05 sim-seconds of causal world-time at every speed, so a `tick % N` gate fires at the SAME world-time cadence regardless of game_speed. The old multiplier made development run ~1/50th as often per unit world-time at 200x.
 2. **Removed the construction-seed lane multiplier.** `_seed_interval` now a fixed `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS` (30) at all speeds (was 1000/2000/4000 at 26/50/=100x).
-3. **Removed the `_seed_construction_jobs` internal re-entry multiplier** (the real residual suppression). Line ~7287 was `_high_speed_interval(60,120,300)` ? let the lane fire every 30 yet skip ~95% of seeds at 200x; now `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS` (fixed 30). Coverage stays complete because `_seed_construction_jobs` advances `_construction_seed_cursor` across settlements on budget-break (per prior AGENTS.md 2026-08-19 note) � per-pass budget capping (2000�s at 200x) just spreads the same settlement coverage across more calls.
-4. **Removed `REBIRTH_CHECK_INTERVAL_TICKS` growth** (`recompute` + rebirth `SettlementManager.process`) ? fixed 4000 at all speeds (was 3000/5000/8000/12000). The recompute budget (3000�s at 200x) and `_tick_budget_exceeded` continue to bound the per-tick cost.
-5. **Retained the prior committed-calendar fix** (`DayNightCycle.gd`) � still in the tree, parse-clean, unchanged this session.
+3. **Removed the `_seed_construction_jobs` internal re-entry multiplier** (the real residual suppression). Line ~7287 was `_high_speed_interval(60,120,300)` ? let the lane fire every 30 yet skip ~95% of seeds at 200x; now `CONSTRUCTION_JOB_SEED_INTERVAL_TICKS` (fixed 30). Coverage stays complete because `_seed_construction_jobs` advances `_construction_seed_cursor` across settlements on budget-break (per prior AGENTS.md 2026-08-19 note) � per-pass budget capping (2000�s at 200x) just spreads the same settlement coverage across more calls.
+4. **Removed `REBIRTH_CHECK_INTERVAL_TICKS` growth** (`recompute` + rebirth `SettlementManager.process`) ? fixed 4000 at all speeds (was 3000/5000/8000/12000). The recompute budget (3000�s at 200x) and `_tick_budget_exceeded` continue to bound the per-tick cost.
+5. **Retained the prior committed-calendar fix** (`DayNightCycle.gd`) � still in the tree, parse-clean, unchanged this session.
 
-**Resource-truth delivery guarantee (req #1) � verified, NOT changed.** `refresh_resource_truth()` already runs at a speed-independent fixed-500 tick cadence (or per-tick when validation-verify armed); it is not gated by `_tick_budget_exceeded` and never speed-suppressed. The "stuck pawn" report is the PHASE8 overlay default. `waiting_for_first_resource_truth_tick` semantics documented.
+**Resource-truth delivery guarantee (req #1) � verified, NOT changed.** `refresh_resource_truth()` already runs at a speed-independent fixed-500 tick cadence (or per-tick when validation-verify armed); it is not gated by `_tick_budget_exceeded` and never speed-suppressed. The "stuck pawn" report is the PHASE8 overlay default. `waiting_for_first_resource_truth_tick` semantics documented.
 
-**Scheduler fairness (req #2) � retained.** The committed-calendar correction from the prior pass (commit `e7384979`) ensures the public day/phase tracks only fully-applied causal work (`SimulationClock.get_committed_world_time_seconds()`, `_commit_legacy_core_quantum` 0.05/tick), so an in-progress multi-frame tick can no longer show a false advanced day. `_tick_budget_exceeded` remains dead code (TickBudgetManager returns false) � irrelevant to this pass.
+**Scheduler fairness (req #2) � retained.** The committed-calendar correction from the prior pass (commit `e7384979`) ensures the public day/phase tracks only fully-applied causal work (`SimulationClock.get_committed_world_time_seconds()`, `_commit_legacy_core_quantum` 0.05/tick), so an in-progress multi-frame tick can no longer show a false advanced day. `_tick_budget_exceeded` remains dead code (TickBudgetManager returns false) � irrelevant to this pass.
 
 **Deliberately deferred (honest, high-risk, need runtime verification):**
 - **req #4 (deterministic batching/coalescing)** and **req #5 (frame-interpolated movement / simulation-driven `data.tile_pos`)** are NOT implemented this pass. Both touch the fragile core scheduler (`TickManager` pending-tick phase machine) and the 13,000-line `HeelKawnian` movement/path/arrival/job-transition state machine respectively. With no runtime testing available, a partial blind implementation would risk breaking the user's playtest far worse than the fixed-point it aims to cure. Doing `_process()`-interpolation-only would require reworking the entire path/arrival/`_on_path_complete`/job-transition machinery in `HeelKawnian.gd:4004-4117`; batching would require rewiring the multi-rate `pawn_continuous`/`pawn_discrete`/`legacy_core` committed lanes in `TickManager.gd`. Both are the correct NEXT pass with runtime profiling.
@@ -895,16 +895,16 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 
 **Verification (static only, per directive):**
 - `tools/diag_parse_check.gd` (load-only SceneTree probe; never boots Main, never advances a tick): all 7 targets OK including `res://scenes/main/Main.gd` (0 parse errors, 0 script errors).
-- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` verified byte-identical (unchanged) � the load-only probe never wrote a save.
+- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` verified byte-identical (unchanged) � the load-only probe never wrote a save.
 - Working tree junk (`.aider.*`, `.godot/**`, etc.) ignored; ONLY `scenes/main/Main.gd` + `AGENTS.md` staged.
 
 **Files modified:**
-- `scenes/main/Main.gd` � `_planner_interval_for_speed()` ? 90; `_heavy_planner_interval_for_speed()` ? 180; construction-seed lane `_seed_interval` fixed 30; `_seed_construction_jobs` internal gate fixed 30; `REBIRTH_CHECK_INTERVAL_TICKS` growth removed.
-- `AGENTS.md` � this entry.
+- `scenes/main/Main.gd` � `_planner_interval_for_speed()` ? 90; `_heavy_planner_interval_for_speed()` ? 180; construction-seed lane `_seed_interval` fixed 30; `_seed_construction_jobs` internal gate fixed 30; `REBIRTH_CHECK_INTERVAL_TICKS` growth removed.
+- `AGENTS.md` � this entry.
 
 **Remaining limitations / next:**
-- Full 200x capability still bounded by the CPU envelope (66 ticks/frame cannot fit in the 6ms slice) � req #4 batching/coalescing is the real unlock, deferred to a runtime-verified pass.
-- Frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains � req #5 decoupling deferred (high-risk cross-cut).
+- Full 200x capability still bounded by the CPU envelope (66 ticks/frame cannot fit in the 6ms slice) � req #4 batching/coalescing is the real unlock, deferred to a runtime-verified pass.
+- Frame-coupled `_process` movement (HeelKawnian.gd ~4004, `step = WALK_SPEED*delta*game_speed`) remains � req #5 decoupling deferred (high-risk cross-cut).
 - Post-fix playtest acceptance: user runs 200x on the saved colony and observes whether settlements/construction now advance in world-time at a cadence comparable to 1x (with CPU appropriately limiting absolute real-time throughput).
 - Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing.
 
@@ -914,7 +914,7 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 
 **Time:** ~UTC
 
-**Objective:** stabilize/repair regressions from `6312e91c` (which made 200x slower in meaningful world development) � (A) revert the 5 proven cadence regressions in `scenes/main/Main.gd`, (B) fix the stale/freed `game_tick` Callable crash, (C) fix the persistent dark/fog overlay lifecycle. Static/parse validation only (user directive: NO Godot sim runs/benchmarks; user playtests). No simulation-logic change to settled/pawn/job/culture/relationship/event systems.
+**Objective:** stabilize/repair regressions from `6312e91c` (which made 200x slower in meaningful world development) � (A) revert the 5 proven cadence regressions in `scenes/main/Main.gd`, (B) fix the stale/freed `game_tick` Callable crash, (C) fix the persistent dark/fog overlay lifecycle. Static/parse validation only (user directive: NO Godot sim runs/benchmarks; user playtests). No simulation-logic change to settled/pawn/job/culture/relationship/event systems.
 
 **What was done:**
 
@@ -942,3 +942,56 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - THE crash fix is prophylactic-correct but the IDENTITY of the freed `_on_game_tick` listener is still unconfirmed (it was a UI/pawn-spawn-time listener, not a core autoload); the crash can no longer fire, but the underlying free is a symptom of the same class as older spawn-teardown issues. If it recurs post-playtest, run with `--trace-game-tick-dispatch` / CrashTrap should_trace to name the exact listener.
 - The fog fix changes the fog-of-war VISUAL semantics to match `FogOfDiscovery`'s documented "CPU saver, not a visual blocker" intent: distant undiscovered tiles beyond the camera window now show as bright, and discovery always clears promptly. This is the intended persistence fix, but the user should confirm the visual is acceptable.
 - Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Pre-existing frame-coupled `_process` movement (HeelKawnian.gd ~4004) remains the determinism/visual cross-cut (deferred).
+
+---
+
+### 2026-09-03 — Session: opencode/big-pickle (Full Problem Set P1–P9: 200x Batching + Movement Decoupling + Job/Liveness/Settlement/AI/Culture/F10 Fixes)
+
+**Time:** ~UTC
+
+**Objective & decision:** Complete the full active problem set (P1–P9) per user directive — implement, do NOT defer, 200× batching/coalescing; decouple pawn movement into simulation-time; rebuild the job-board index; fix the pawn-liveness chain; repair settlement membership/formalization consistency; fix AI source adapters; dedupe cultural-exposure spam; rebuild F10 as a bounded read-only diagnostic snapshot. User answered "Implement both, static-only" (P1+P2) — NO Godot runtime runs / no sims / no benchmarks; static/parse validation only; user playtests.
+
+**P1 — 200× batching/coalescing (active, NEW this pass):** `autoloads/TickManager.gd`
+- Root problem: the CPU envelope makes replaying 66 base sub-ticks (0.05 s of canonical world-time each) per frame at 200× impossible — each full tick is 20–57 ms of CPU but the frame slice is 6 ms. So 200× silently throttled toward ~20×.
+- `SPEED_BATCH_FACTOR = {0:1,1:1,2:1,3:1,4:2,5:4}` — at 100×/200× one COMPLETED transaction now represents more canonical world-time (a larger canonical quantum), and the authoritative CONTINUOUS lanes (pawn needs/aging/movement, which already integrate any frontier gap in ONE pass via `_apply_pawn_time_lane(sim_dt)`) coalesce several sub-ticks into one larger integration = true coalescing. 1×–50× stay batch 1 (exact legacy fidelity).
+- `_batch_factor` + `_update_batch_factor()` (idempotent, on `set_speed_index` and `ensure_legacy_bridge_initialized`); `canonical_seconds_per_transaction()`, `base_units_per_transaction()`.
+- Wired: `_start_pending_tick()` unwinds `base_units_per_transaction()` (0.2 s @200×); `_commit_legacy_core_quantum()` commits `canonical_seconds_per_transaction()`; `_process` availability check and `_maybe_warn_backlog()` use the batched unit.
+- Honest effective-speed: `effective_world_speed` (committed canonical world-seconds / real second, measured per 1 s window) + `get_effective_world_speed()` / `get_batch_factor_active()`. F10 TIME/ENGINE section prints `Effective World Speed: %.2fx` and `Batch Factor Active: %d`. The committed-derived calendar (`DayNightCycle`) naturally reflects the larger committed quantum, so the public day tracks the batched world-time.
+- Conservatism: batch only activates at 100×/200× and is modest (2/4). Discrete per-tick listeners (job-scan pipelines, settlement recompute, construction seeding) run once per completed transaction; the 09-02 liveness cadences (`return 1`) ensure they run every compat tick, so no stall — they just make fewer, larger decision steps per world-time at the two fastest speeds. CPU remains the hard ceiling; batching raises world-time throughput per completed tick rather than replaying more ticks.
+
+**P2 — Decouple pawn movement into simulation-time (active, NEW this pass):** `scripts/pawn/HeelKawnian.gd`
+- `_sim_movement_accum` + deterministic stepping in `_apply_pawn_time_lane` (whole-tile commits of `data.tile_pos` on `sim_dt`, calling `_step_path_deterministic()`).
+- `_step_path_deterministic()`: commits `data.tile_pos = _target_tile`, `RoadMemory.record_step`, `_world.record_footstep`, `_emit_footstep_dust`, `_track_region_visit`, `_advance_path()`, `SpatialManager.update_pawn_position`.
+- `_p2_walk_speed_tiles_per_sec()`: mirrors the old frame step multipliers (terrain/mount/life-stage/penalties, `WALK_SPEED_WORLD_UNITS_PER_SEC` ÷ `World.TILE_PIXELS`) to preserve travel duration in tiles/sec.
+- `_process` movement is now VISUAL-ONLY: interpolates `position` toward `_target_world_pos`; removed ALL `data.tile_pos` writes, `_advance_path`, footstep/dust, `_track_region_visit`, and SpatialManager update (they now live in the sim lane). Removes frame/FPS coupling from tile truth and prevents 200× overshoot from corrupting arrival.
+
+**P3 — Rebuild the job-board index (warmth-pressure hoist):** `scripts/pawn/HeelKawnian.gd` `_phase_job_scan()` now computes `_precomp_local_warmth_press` ONCE above the `priority_cb` closure (the old per-candidate `ColonySimServices.get_warmth_pressure(center_rk)`), so every job candidate in one decision reuses the same value. Behavior-neutral (same value every candidate), saves per-candidate cost.
+
+**P4 — Pawn liveness chain (arrival tolerance):** `scripts/pawn/HeelKawnian.gd` `_on_path_complete` WALKING_TO_JOB now uses `_pawn_at_work_tile()` (Chebyshev ≤ 1 of `work_tile`) instead of exact `data.tile_pos == _current_job.work_tile`, fixing the frame-coupled overshoot that falsely unclaimed jobs and kept pawns from reaching WORKING at 200×.
+
+**P5 — Settlement membership/formalization consistency:** `autoloads/SettlementMemory.gd` `_apply_guild_settlement_gate` — P5a `center_not_walkable` fallback scans expanding Chebyshev distance (1–7) in the 16×16 region for a walkable tile via `world.pathfinder.component_of`; P5b the infra-gate formalization path now populates `member_ids` from living pawns (guild pawns, else `_living_pawns()` matched by `WorldMemory._region_key`) so formal settlements don't get empty `member_pawn_ids`.
+
+**P6 — AI source adapters (committed earlier, `aa993849`):** `AIPawnPsychologist.gd` + `AIDiplomacyDirector.gd` deterministic `WorldRNG`; `HeelKawnAIOrchestrator.gd` rewired 5 source adapters to real data.
+
+**P7 — Cultural-exposure dedup (committed earlier, `aa993849`):** `HeelKawnian.gd` `CULTURAL_EXPOSURE_DEDUP_TICKS=1200` + static dedup cache + compact payload scalar fields.
+
+**P8 — F10 bounded read-only snapshot (committed earlier, `220816bb`):** honest TickProfiler readout (availability + scope), `MAX_SNAPSHOT_LINES=300` cap with truncation banner, plus this pass's P1 additions (effective speed + batch factor in TIME/ENGINE).
+
+**Verification (static/parse only, fence `--playtest-no-save` respected, production autosave untouched):**
+- `tools/diag_parse_check.gd` — all 7 configured targets OK (CreatorDebugMenu, HeelKawnian, SettlementMemory, Main, ColonySimServices, f10 regression, save_fence).
+- NEW `tools/diag_p1_batch_parse.gd` — TickManager, SimulationClock, CreatorDebugMenu, HeelKawnian, SettlementMemory all OK (failures=0 targets=5). Load-only SceneTree probe; never boots Main, never advances a tick.
+- Production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` (38,733,140 B at `%APPDATA%\Godot\app_userdata\HeelKawn\heelkawn_colony_autosave.sav`) verified byte-identical before and after every parse probe — no tool wrote a save.
+
+**Files modified:**
+- `autoloads/TickManager.gd` — P1 batched scheduler (SPEED_BATCH_FACTOR, canonical/effective-speed, `_update_batch_factor`, batched accumulator unwinding + quantum commit, effective_world_speed metric + accessors).
+- `scripts/pawn/HeelKawnian.gd` — P2 movement decoupling, P3 warmth hoist, P4 arrival tolerance.
+- `autoloads/SettlementMemory.gd` — P5 center fallback + infra-gate member_ids.
+- `scripts/ui/CreatorDebugMenu.gd` — P1 F10 effective-speed/batch readout in TIME/ENGINE.
+- `tools/diag_p1_batch_parse.gd` — NEW P1 parse probe.
+- `AGENTS.md` — this entry.
+
+**Known remaining / notes:**
+- P1 is deliberately CPU-bounded: batching DOES NOT reach full 200× when the simulator cannot replay full ticks fast enough; `Effective World Speed` in F10 is the honest ceiling. The coalescing only lifts world-time throughput per completed tick (2×/4× at 100×/200×), so pawns develop fewer-but-larger decision steps per world-time at the two fastest speeds — the intended trade, verified static-only.
+- P2/P1 are the large untested cross-cuts the user accepted ("Implement both, static-only"). The movement lane rewrite and the batched quantum both need the user's live playtest: 200× colony development cadence, pawn visual-vs-tile alignment, arrival/WORKING transitions, and the committed-calendar day advance.
+- OPEN after this pass (carried): per-stage job-rejection counters (P3-2026-08-29), per-pawn starvation trace (P4-2026-08-29), autosave stage timing (P5-2026-08-29). The frame-coupled `_process` movement determinism gap is now materially reduced by P2 (tile truth is sim-lane-committed), though the visual `position` interpolation remains frame-driven by design.
+- Working tree junk retained untracked (`.aider.*`, `.godot/**`, `.letta/`, stray shell-output word files); only the intended source files + the new probe tool + AGENTS.md were staged/committed.

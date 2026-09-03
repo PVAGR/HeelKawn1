@@ -12,6 +12,25 @@ const SPEED_LABELS: Array      = ["1x", "6x", "26x", "50x", "100x", "200x"]
 const BASE_TICK_INTERVAL: float = 0.05
 const MAX_ACCUMULATOR_SEC: float = 5.0
 
+## P1: HIGH-SPEED BATCHING (coalescing). The CPU envelope makes replaying every
+## base sub-tick (0.05 s of canonical world time) at 200x impossible within a
+## frame slice: 200x asks for 66 sub-ticks/frame but each full tick is 20-57 ms of
+## CPU. Instead of silently throttling (which made 200x ~= 100x cheap-worlds), we
+## batch: at the fastest speeds one COMPLETED transaction represents MORE canonical
+## world time (a larger quantum), so the authoritative CONTINUOUS lanes
+## (pawn needs/aging/movement, which already integrate any frontier gap in one
+## pass via _apply_pawn_time_lane(sim_dt)) coalesce several sub-ticks into one
+## larger integration. This is true coalescing: fewer, larger transactions cover
+## the same world time, so fewer are needed per frame to hold the requested speed.
+##
+## Batch factor per speed index (0=1x .. 5=200x). 1x-50x stay 1 (no batching,
+## exact per-tick legacy fidelity). 100x/200x batch the continuous lanes.
+## DISCRETE per-tick listeners (pawn job-scan pipelines, settlement recompute,
+## construction seeding) still run once per completed transaction, but they already
+## use speed-multiplied intervals (restored in the 08-31 cadence revert) and the
+## CanonicalQuantum below is what drives the committed world-time they observe.
+const SPEED_BATCH_FACTOR: Dictionary = {0:1, 1:1, 2:1, 3:1, 4:2, 5:4}
+
 ## ---------------------------------------------------------------------------
 ## LEGACY-CORE AUTHORITATIVE COMMIT BRIDGE (HK-TIME-ARCH-P2A / P2A.1)
 ##
@@ -70,7 +89,30 @@ const PAWN_CONTINUOUS_LANE_ID: StringName = &"pawn_continuous"
 const PAWN_DISCRETE_LANE_ID: StringName = &"pawn_discrete"
 const LEGACY_DOMAIN_TICK_INTERVAL: float = 1.0  # old tick-domain notation ONLY — NOT canonical seconds
 const LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION: float = \
-	BASE_TICK_INTERVAL * float(SPEED_MULTIPLIERS[0])  # 0.05 canonical world s / transaction
+	BASE_TICK_INTERVAL * float(SPEED_MULTIPLIERS[0])  # 0.05 canonical world s / transaction @1x
+
+## P1: effective batch factor for the CURRENT speed index (1 when not batching).
+var _batch_factor: int = 1
+
+## Read the configured batch factor for the current speed index.
+func get_batch_factor() -> int:
+	return _batch_factor
+
+## Recompute _batch_factor from the current speed index. Idempotent; called on
+## set_speed_index and at first bridge init. Never below 1.
+func _update_batch_factor() -> void:
+	_batch_factor = maxi(1, int(SPEED_BATCH_FACTOR.get(_speed_index, 1)))
+
+## The canonical world-seconds represented by ONE completed transaction at the
+## current speed (after P1 batching). Continuous lanes coalesce this whole gap.
+func canonical_seconds_per_transaction() -> float:
+	return LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION * float(get_batch_factor())
+
+## The per-transaction accumulator cost (real-time scheduler units). A batched
+## transaction consumes `batch` base-units so the accumulator unwinds at the
+## requested speed while emitting fewer (larger) ticks.
+func base_units_per_transaction() -> float:
+	return BASE_TICK_INTERVAL * float(get_batch_factor())
 ## Maximum cap per speed index (0=1x through 5=200x). These are maximum caps,
 ## not targets — the actual number of ticks per frame is further reduced by
 ## budget-based throttling via [_max_ticks_per_frame_for_speed()].
@@ -111,6 +153,15 @@ var _compat_rate_window_start_msec: int = 0
 var _compat_rate_window_ticks: int = 0
 var _compat_ticks_emitted: int = 0
 var compat_tick_rate_per_real_second: float = 0.0
+## P1: measured EFFECTIVE world-time throughput (canonical world-seconds of committed
+## causal work per real second). Unlike the compat-tick rate (which counts raw ticks,
+## misleading under batching), this reflects how much world history the sim actually
+## produced per real second. At 1x it is ~1.0; at 200x with CPU headroom it approaches
+## the requested multiplier but is CPU-bounded. Honest ceiling for the F10 snapshot.
+var _eff_rate_window_start_msec: int = 0
+var _eff_rate_window_committed_start: float = 0.0
+var _eff_rate_window_set: bool = false
+var effective_world_speed: float = 0.0
 var _refcounted_tickables: Array = []
 var _tickable_cache: Array = []
 var _tickable_callables: Array = []
@@ -231,7 +282,7 @@ func _process(delta: float) -> void:
 		# unwinding at 200x). Otherwise a bare phase-advance happened; loop to
 		# run the next phase's first callback within the same slice.
 		if not _pending_tick_active:
-			if _accumulated_time < BASE_TICK_INTERVAL:
+			if _accumulated_time < base_units_per_transaction():
 				break
 			_start_pending_tick()
 	debug_last_sim_slice_usec = Time.get_ticks_usec() - slice_start
@@ -294,7 +345,7 @@ func _run_one_callback() -> int:
 
 
 func _start_pending_tick() -> void:
-	_accumulated_time -= BASE_TICK_INTERVAL
+	_accumulated_time -= base_units_per_transaction()
 	current_tick += 1
 	if _tickable_cache_dirty:
 		_rebuild_tickable_cache()
@@ -375,6 +426,21 @@ func _complete_pending_tick() -> void:
 		compat_tick_rate_per_real_second = float(_compat_rate_window_ticks) / (float(elapsed_ms) / 1000.0)
 		_compat_rate_window_ticks = 0
 		_compat_rate_window_start_msec = 0
+	# P1: effective world-time throughput (committed canonical seconds per real second).
+	var comm_sec: float = 0.0
+	if SimulationClock != null and SimulationClock.has_method("get_committed_world_time_seconds"):
+		comm_sec = float(SimulationClock.get_committed_world_time_seconds())
+	if not _eff_rate_window_set:
+		_eff_rate_window_set = true
+		_eff_rate_window_start_msec = now_ms
+		_eff_rate_window_committed_start = comm_sec
+	else:
+		var eff_elapsed_ms: int = now_ms - _eff_rate_window_start_msec
+		if eff_elapsed_ms >= 1000:
+			var d_comm: float = comm_sec - _eff_rate_window_committed_start
+			effective_world_speed = d_comm / (float(eff_elapsed_ms) / 1000.0)
+			_eff_rate_window_start_msec = now_ms
+			_eff_rate_window_committed_start = comm_sec
 	var wall: int = Time.get_ticks_usec() - _pending_tick_wall_start_usec
 	debug_last_tick_wall_usec = wall
 	debug_last_tick_work_usec = _pending_tick_work_usec
@@ -451,6 +517,7 @@ func ensure_legacy_bridge_initialized() -> void:
 		return
 	if not SimulationClock.has_method("is_authoritative_lane_roster_sealed"):
 		return
+	_update_batch_factor()
 	if SimulationClock.is_authoritative_lane_roster_sealed():
 		return  # already bridged for this epoch — idempotent, no reseal, no reset
 	SimulationClock.register_authoritative_lane(LEGACY_CORE_LANE_ID, 0.0)
@@ -477,7 +544,7 @@ func _commit_legacy_core_quantum() -> void:
 		return
 	var current: float = float(SimulationClock.get_lane_applied_world_time_seconds(LEGACY_CORE_LANE_ID))
 	var target: float = float(SimulationClock.get_target_world_time_seconds())
-	var candidate: float = current + LEGACY_CORE_CANONICAL_SECONDS_PER_TRANSACTION
+	var candidate: float = current + canonical_seconds_per_transaction()
 	var next: float = minf(candidate, target)
 	if next > current:
 		SimulationClock.commit_lane_world_time(LEGACY_CORE_LANE_ID, next)
@@ -637,7 +704,7 @@ func _rebuild_tickable_cache() -> void:
 
 
 func _maybe_warn_backlog() -> void:
-	var queued_ticks_est: float = _accumulated_time / BASE_TICK_INTERVAL
+	var queued_ticks_est: float = _accumulated_time / base_units_per_transaction()
 	if _pending_tick_active:
 		queued_ticks_est += 1.0
 	if queued_ticks_est > 200.0:
@@ -740,6 +807,7 @@ func set_speed(multiplier: float) -> void:
 func set_speed_index(index: int) -> void:
 	var prev_index: int = _speed_index
 	_speed_index = clampi(index, 0, SPEED_MULTIPLIERS.size() - 1)
+	_update_batch_factor()
 	# CRITICAL: Reset accumulator when decelerating to prevent event flood
 	# when going from high speed (e.g. 200x) back to low speed (e.g. 1x).
 	if _speed_index < prev_index:
@@ -764,6 +832,15 @@ func get_world_time_seconds() -> float:
 ## Measured real-time compatibility tick rate (compat ticks / real second).
 func get_compat_tick_rate_per_real_second() -> float:
 	return compat_tick_rate_per_real_second
+## P1: measured EFFECTIVE world-time throughput (committed canonical world-seconds
+## per real second). CPU-bounded honest ceiling — at 200x it will be < 200 when the
+## simulator cannot replay full ticks fast enough.
+func get_effective_world_speed() -> float:
+	return effective_world_speed
+## P1: the currently active batch factor (canonical world-seconds per transaction
+## ÷ base quantum) for the F10 snapshot.
+func get_batch_factor_active() -> int:
+	return get_batch_factor()
 ## Total compatibility ticks emitted (session lifetime). Diagnostic only.
 func get_compat_ticks_emitted() -> int:
 	return _compat_ticks_emitted

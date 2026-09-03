@@ -596,6 +596,13 @@ var _facing_dir: Vector2 = Vector2(0.0, 1.0)  # Last movement direction for spri
 var _target_tile: Vector2i = Vector2i.ZERO
 var _target_world_pos: Vector2 = Vector2.ZERO
 
+## P2: deterministic movement accumulator. `data.tile_pos` (world truth) is now
+## advanced by the authoritative continuous lane (heard in `_apply_pawn_time_lane`
+## via sim_dt), never by the frame-coupled `_process`. This removes the
+## wall-clock-frame dependence from tile truth (determinism fix) and lets the
+## pawn commit whole-tile steps at a rate set by WORLD time, independent of FPS.
+var _sim_movement_accum: float = 0.0
+
 ## Ticks remaining in the EATING state.
 var _eat_ticks_left: int = 0
 
@@ -1222,6 +1229,72 @@ func _apply_pawn_time_lane(sim_dt: float) -> void:
 	# intoxication/stamina + deterministic age progression). Discrete death rolls and
 	# discrete survival actions remain on the legacy/discrete path
 	# (_pc_discrete_survival_checks, called from _on_world_tick).
+
+	# P2: deterministic movement stepping. `data.tile_pos` (world truth) advances
+	# here in whole-tile steps driven by WORLD time (sim_dt), NOT by wall-clock
+	# frames. `_process` only interpolates the visual `position` toward the
+	# current `_target_world_pos`; it never writes `data.tile_pos`. This removes
+	# frame/FPS coupling from tile truth and prevents 200x overshoot from
+	# corrupting arrival (see _pawn_at_work_tile).
+	if _path.size() > 0 and data != null:
+		var walk_speed_tiles_per_sec: float = _p2_walk_speed_tiles_per_sec()
+		if walk_speed_tiles_per_sec > 0.0:
+			_sim_movement_accum += walk_speed_tiles_per_sec * sim_dt
+			while _sim_movement_accum >= 1.0 and _path.size() > 0:
+				_sim_movement_accum -= 1.0
+				if not _step_path_deterministic():
+					break
+
+
+## P2: speed at which a pawn traverses path tiles in tiles/second, used by the
+## deterministic movement lane. Mirrors the constants used by the old frame
+## step (WALK_SPEED_WORLD_UNITS_PER_SEC and terrain/mount/life-stage/penalty
+## multipliers) so travel duration is preserved.
+func _p2_walk_speed_tiles_per_sec() -> float:
+	if _world == null or _world.pathfinder == null:
+		return 0.0
+	var speed: float = float(WALK_SPEED_WORLD_UNITS_PER_SEC) * _meaning_speed_multiplier
+	if data.tile_pos != _movement_terrain_tile_cache:
+		_refresh_movement_terrain_cache(data.tile_pos)
+	speed *= _movement_terrain_speed_mult
+	if not data.injuries.is_empty():
+		speed *= (1.0 - BodyRiskManager.get_mobility_penalty(data))
+	if BodyPartWounds != null:
+		speed *= (1.0 - BodyPartWounds.get_movement_penalty(data))
+	speed *= data.life_stage_move_mult()
+	if DiseaseSystem != null:
+		speed *= (1.0 - DiseaseSystem.get_disease_move_penalty(data))
+	if data.intoxication > 30.0:
+		speed *= 0.8
+	if MountSystem != null:
+		var mount_bonus: float = MountSystem.get_speed_bonus(int(data.id))
+		if mount_bonus > 1.0:
+			speed *= mount_bonus
+	if _movement_terrain_is_liquidish or _is_on_boat():
+		speed *= 0.3
+	# Convert world-units/second into tiles/second (1 tile == TILE_PIXELS world units).
+	return speed / World.TILE_PIXELS
+
+
+## P2: commit one whole-tile movement step along _path, mirroring what the old
+## frame-coupled _process did (set _target_tile/_target_world_pos, record
+## footsteps, then _advance_path which transitions on exhaustion).
+func _step_path_deterministic() -> bool:
+	if _path.size() <= 0 or data == null:
+		return false
+	var from_step: Vector2i = data.tile_pos
+	data.tile_pos = _target_tile
+	if from_step != _target_tile and _world != null:
+		if RoadMemory != null:
+			RoadMemory.record_step(from_step, _target_tile, _world)
+		if _world.has_method("record_footstep"):
+			_world.record_footstep(data.tile_pos)
+	_emit_footstep_dust()
+	_track_region_visit(_target_tile)
+	_advance_path()
+	if SpatialManager != null and from_step != data.tile_pos:
+		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
+	return _path.size() > 0
 
 
 ## HK-TIME-P3-FIX 3: discrete survival checks that were originally inside the
@@ -4086,27 +4159,20 @@ func _process(delta: float) -> void:
 	var to_target_dist_sq: float = to_target.length_squared()
 	var step_sq: float = step * step
 
-	var old_tile_pos = data.tile_pos # ARCHITECT T006 - Store old position for chunk check
-	if to_target_dist_sq <= step_sq:
-		position = _target_world_pos
-		var from_step: Vector2i = data.tile_pos
-		data.tile_pos = _target_tile
-		if from_step != _target_tile:
-			RoadMemory.record_step(from_step, _target_tile, _world)
-		# Record footstep for path wearing and emit dust
-		if _world != null and _world.has_method("record_footstep"):
-			_world.record_footstep(data.tile_pos)
-		_emit_footstep_dust()
-		# Wanderer path: track region exploration.
-		_track_region_visit(_target_tile)
-		_advance_path()
-	else:
+	# P2: VISUAL-ONLY movement. World truth (data.tile_pos + path advancement)
+	# is committed deterministically by the continuous lane (see _apply_pawn_time_lane).
+	# Here we only interpolate the display `position` toward the current target so
+	# pawns render smoothly; we NEVER write data.tile_pos or call _advance_path
+	# (that would double-advance the path and re-introduce frame coupling).
+	if to_target_dist_sq > step_sq:
 		if to_target_dist_sq > 0.000001:
 			position += to_target * (step / sqrt(to_target_dist_sq))
+	else:
+		position = _target_world_pos
 
-	# ARCHITECT T006: Update SpatialManager if pawn moved to a new chunk
-	if SpatialManager != null and data != null and old_tile_pos != data.tile_pos:
-		SpatialManager.update_pawn_position(int(data.id), data.tile_pos)
+	# ARCHITECT T006: SpatialManager chunk tracking is driven by the sim lane
+	# (_step_path_deterministic) which already updates pawn position on tile commit.
+	# No SpatialManager update needed here (data.tile_pos unchanged by _process).
 
 	# PERFORMANCE: Only check knowledge stones when visuals update
 	# Knowledge doesn't need to be checked every single frame
@@ -4211,6 +4277,24 @@ func _clear_path() -> void:
 	set_process(false)  # No movement needed â€” stop per-frame updates
 
 
+## P4: True arrival check for a claimed job. At high speed the frame-coupled
+## _process step can overshoot the exact work_tile (data.tile_pos lands on the
+## last path tile, which the pathfinder may set adjacent to the work tile).
+## Accept arrival when on the work tile OR the current tile is adjacent
+## (Chebyshev distance <= 1) to it, so a completed path to an adjacent final
+## tile is not misread as a spurious unclaim (which would bounce the pawn to
+## IDLE and prevent WALKING->WORKING observation at 200x).
+func _pawn_at_work_tile() -> bool:
+	if _current_job == null or data == null:
+		return false
+	var wt: Vector2i = _current_job.work_tile
+	if data.tile_pos == wt:
+		return true
+	var dx: int = data.tile_pos.x - wt.x
+	var dy: int = data.tile_pos.y - wt.y
+	return absi(dx) <= 1 and absi(dy) <= 1
+
+
 func _on_path_complete() -> void:
 	match _state:
 		State.DRAFT_WALK:
@@ -4223,7 +4307,7 @@ func _on_path_complete() -> void:
 				_finish_autonomy_draft_walk(ap, apid)
 			_request_redraw()
 		State.WALKING_TO_JOB:
-			if _current_job != null and data.tile_pos == _current_job.work_tile:
+			if _current_job != null and _pawn_at_work_tile():
 				_state = State.WORKING
 				_request_redraw()
 			else:
@@ -5001,6 +5085,14 @@ func _phase_job_scan() -> void:
 	var _cached_stock_wood: int = StockpileManager.total_count_of(Item.Type.WOOD)
 	var _cached_stock_stone: int = StockpileManager.total_count_of(Item.Type.STONE)
 	var pawn_cold: bool = data != null and float(data.body_temperature) < 36.5
+	# P3: Hoist local warmth pressure above the priority_cb closure —
+	# same for every job candidate in one decision, saves per-candidate cost.
+	var _precomp_local_warmth_press: float = 0.0
+	if ColonySimServices != null and data != null and SettlementMemory != null:
+		var _pawn_rk_warmth: int = _WM._region_key(data.tile_pos.x, data.tile_pos.y)
+		var _center_rk_warmth: int = SettlementMemory.get_center_region_for_region(_pawn_rk_warmth)
+		if _center_rk_warmth >= 0:
+			_precomp_local_warmth_press = ColonySimServices.get_warmth_pressure(_center_rk_warmth)
 	var resolve_region_key_for_work_tile: Callable = func(work_tile: Vector2i) -> int:
 		if work_tile_region_cache.has(work_tile):
 			return int(work_tile_region_cache[work_tile])
@@ -5129,12 +5221,7 @@ func _phase_job_scan() -> void:
 		if _idle_decision_result == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
 			base_bias += 2
 		if not food_emergency:
-			var local_warmth_press: float = 0.0
-			if ColonySimServices != null and data != null and SettlementMemory != null:
-				var pawn_rk: int = WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)
-				var center_rk: int = SettlementMemory.get_center_region_for_region(pawn_rk)
-				if center_rk >= 0:
-					local_warmth_press = ColonySimServices.get_warmth_pressure(center_rk)
+			var local_warmth_press: float = _precomp_local_warmth_press
 			var warmth_need: float = maxf(crisis_warmth_pressure, local_warmth_press)
 			var colony_needs_build: bool = pawn_cold \
 					or warmth_need > 0.20 \

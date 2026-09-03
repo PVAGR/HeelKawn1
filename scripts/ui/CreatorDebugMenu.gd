@@ -3035,6 +3035,8 @@ func _build_time_scheduler_dict() -> Dictionary:
 		"pawn_discrete_applied": 0.0,
 		"compat_tick": 0,
 		"compat_tick_rate_real_sec": 0.0,
+		"effective_world_speed": 0.0,
+		"batch_factor_active": 1,
 		"scheduler_pending": false,
 		"paused": false,
 		"pawn_discrete_bounded": {
@@ -3061,6 +3063,8 @@ func _build_time_scheduler_dict() -> Dictionary:
 		time_dict["speed_label"] = str(TickManager.get_speed_label()) if TickManager.has_method("get_speed_label") else (str(TickManager.get_speed_index()) + "x")
 		time_dict["compat_tick"] = int(TickManager.current_tick)
 		time_dict["compat_tick_rate_real_sec"] = float(TickManager.get_compat_tick_rate_per_real_second()) if TickManager.has_method("get_compat_tick_rate_per_real_second") else float(TickManager.compat_tick_rate_per_real_second)
+		time_dict["effective_world_speed"] = float(TickManager.get_effective_world_speed()) if TickManager.has_method("get_effective_world_speed") else 0.0
+		time_dict["batch_factor_active"] = int(TickManager.get_batch_factor_active()) if TickManager.has_method("get_batch_factor_active") else 1
 		time_dict["scheduler_pending"] = bool(TickManager.get("_pending_tick_active"))
 
 	if SimulationClock != null:
@@ -3796,6 +3800,8 @@ func _get_time_section(snapshot: Dictionary) -> String:
 	lines.append("  pawn_discrete : %.4f" % time.get("pawn_discrete_applied", 0.0))
 	lines.append("Compat Tick: %d" % time.get("compat_tick", 0))
 	lines.append("Compat Tick Rate: %.2f / real s" % time.get("compat_tick_rate_real_sec", 0.0))
+	lines.append("Effective World Speed: %.2fx (committed world-s / real s, CPU-bounded)" % time.get("effective_world_speed", 0.0))
+	lines.append("Batch Factor Active: %d (canonical world-s / transaction \u00f7 base quantum)" % int(time.get("batch_factor_active", 1)))
 	lines.append("Scheduler Pending: %s" % str(time.get("scheduler_pending", false)))
 	lines.append("Paused: %s" % str(time.get("paused", false)))
 	var pd = time.get("pawn_discrete_bounded", {})

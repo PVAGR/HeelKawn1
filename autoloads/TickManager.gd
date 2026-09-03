@@ -12,24 +12,17 @@ const SPEED_LABELS: Array      = ["1x", "6x", "26x", "50x", "100x", "200x"]
 const BASE_TICK_INTERVAL: float = 0.05
 const MAX_ACCUMULATOR_SEC: float = 5.0
 
-## P1: HIGH-SPEED BATCHING (coalescing). The CPU envelope makes replaying every
-## base sub-tick (0.05 s of canonical world time) at 200x impossible within a
-## frame slice: 200x asks for 66 sub-ticks/frame but each full tick is 20-57 ms of
-## CPU. Instead of silently throttling (which made 200x ~= 100x cheap-worlds), we
-## batch: at the fastest speeds one COMPLETED transaction represents MORE canonical
-## world time (a larger quantum), so the authoritative CONTINUOUS lanes
-## (pawn needs/aging/movement, which already integrate any frontier gap in one
-## pass via _apply_pawn_time_lane(sim_dt)) coalesce several sub-ticks into one
-## larger integration. This is true coalescing: fewer, larger transactions cover
-## the same world time, so fewer are needed per frame to hold the requested speed.
-##
-## Batch factor per speed index (0=1x .. 5=200x). 1x-50x stay 1 (no batching,
-## exact per-tick legacy fidelity). 100x/200x batch the continuous lanes.
-## DISCRETE per-tick listeners (pawn job-scan pipelines, settlement recompute,
-## construction seeding) still run once per completed transaction, but they already
-## use speed-multiplied intervals (restored in the 08-31 cadence revert) and the
-## CanonicalQuantum below is what drives the committed world-time they observe.
-const SPEED_BATCH_FACTOR: Dictionary = {0:1, 1:1, 2:1, 3:1, 4:2, 5:4}
+## P1: HIGH-SPEED BATCHING (coalescing). 
+## REAL 200× IMPLEMENTATION: All batch factors set to 1.
+## Speed changes how quickly the observer experiences canonical time,
+## NOT the amount of discrete behavior per canonical day.
+## Discrete systems (job selection, pawn decisions, etc.) run once per
+## canonical tick regardless of speed. Speed only affects target rate.
+## The committed-target lag will grow at high speeds when CPU cannot
+## process all requested ticks - this is honest accounting, not a bug.
+## The renderer stays responsive via the slice budget; backlog accumulates.
+## Batch factor per speed index (0=1x .. 5=200x). All set to 1.
+const SPEED_BATCH_FACTOR: Dictionary = {0:1, 1:1, 2:1, 3:1, 4:1, 5:1}
 
 ## ---------------------------------------------------------------------------
 ## LEGACY-CORE AUTHORITATIVE COMMIT BRIDGE (HK-TIME-ARCH-P2A / P2A.1)
@@ -162,6 +155,10 @@ var _eff_rate_window_start_msec: int = 0
 var _eff_rate_window_committed_start: float = 0.0
 var _eff_rate_window_set: bool = false
 var effective_world_speed: float = 0.0
+## REAL 200×: Committed-target lag in canonical seconds
+## How far behind the committed world time is from the target time.
+## At high speeds with CPU constraints, this will grow - honest accounting.
+var committed_target_lag_seconds: float = 0.0
 var _refcounted_tickables: Array = []
 var _tickable_cache: Array = []
 var _tickable_callables: Array = []
@@ -428,8 +425,17 @@ func _complete_pending_tick() -> void:
 		_compat_rate_window_start_msec = 0
 	# P1: effective world-time throughput (committed canonical seconds per real second).
 	var comm_sec: float = 0.0
-	if SimulationClock != null and SimulationClock.has_method("get_committed_world_time_seconds"):
-		comm_sec = float(SimulationClock.get_committed_world_time_seconds())
+	var target_sec: float = 0.0
+	if SimulationClock != null:
+		if SimulationClock.has_method("get_committed_world_time_seconds"):
+			comm_sec = float(SimulationClock.get_committed_world_time_seconds())
+		if SimulationClock.has_method("get_target_world_time_seconds"):
+			target_sec = float(SimulationClock.get_target_world_time_seconds())
+	# REAL 200×: Track committed-target lag
+	committed_target_lag_seconds = target_sec - comm_sec
+	if committed_target_lag_seconds < 0.0:
+		committed_target_lag_seconds = 0.0  # Should not happen, but guard
+	
 	if not _eff_rate_window_set:
 		_eff_rate_window_set = true
 		_eff_rate_window_start_msec = now_ms
@@ -841,6 +847,10 @@ func get_effective_world_speed() -> float:
 ## ÷ base quantum) for the F10 snapshot.
 func get_batch_factor_active() -> int:
 	return get_batch_factor()
+## REAL 200×: Committed-target lag in canonical seconds
+## How far behind the committed world time is from the target time.
+func get_committed_target_lag_seconds() -> float:
+	return committed_target_lag_seconds
 ## Total compatibility ticks emitted (session lifetime). Diagnostic only.
 func get_compat_ticks_emitted() -> int:
 	return _compat_ticks_emitted

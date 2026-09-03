@@ -97,10 +97,12 @@ enum { PHASE_TICKABLES = 0, PHASE_REFCOUNTED = 1, PHASE_GAME_TICK = 2, PHASE_COM
 ## (target / lane-applied / committed). Do not document current_tick as time, do
 ## not multiply it by game speed, and do not derive committed world time from it.
 var current_tick: int = 0
-## Real-time compatibility-tick accumulator. The legacy tick bus is DECOUPLED
-## from game speed (see _process): it emits ~BASE_TICK_INTERVAL compat ticks per
-## REAL second at every speed, so 200x no longer requests ~4000 full ticks/sec.
-## World time itself advances on game speed via SimulationClock.
+## Game-speed compatibility-tick accumulator. The legacy tick bus accrues
+## SPEED-scaled time (sim_delta = real_delta * multiplier), so it emits more
+## compat ticks per real second at higher speeds — 100x/200x genuinely do more
+## discrete simulation work than 50x, bounded only by the per-frame slice budget
+## and the MAX_ACCUMULATOR_SEC backlog cap (kept responsive). The SimulationClock
+## continuous lane remains the authoritative world-time source.
 var _accumulated_time: float = 0.0
 var _speed_index: int = 0
 
@@ -204,11 +206,14 @@ func _process(delta: float) -> void:
 			SimulationClock.advance_target(sim_delta)
 		elif SimulationClock.has_method("advance_sim_time"):
 			SimulationClock.advance_sim_time(sim_delta)
-	# Compatibility-tick bus: bounded to REAL time, NOT game speed. This is the
-	# core multi-rate decoupling — the legacy full-world tick pipeline runs at
-	# ~20/sec at every speed, while world time (and the pawn time lane below)
-	# flows at game speed. 200x no longer requests ~4000 full ticks/sec.
-	_accumulated_time += delta
+	# Compatibility-tick bus: bounded to game SPEED (sim_delta), so higher speeds
+	# request proportionally more legacy full-world ticks per real second. This is
+	# what makes 100x/200x produce materially more simulation progression than
+	# 50x when CPU capacity exists. The real per-frame SLICE budget
+	# (SIM_SLICE_BUDGET_USEC), the MAX_ACCUMULATOR_SEC backlog cap, and the
+	# MAX_TICKS_PER_FRAME/_max_ticks_per_frame_for_speed per-frame caps all remain
+	# and keep the render loop responsive under load (the slice yields to Godot).
+	_accumulated_time += sim_delta
 	# Cap accumulator to prevent death spiral if frame takes too long.
 	# The cap bounds backlog; it does NOT drop already-requested sim time below
 	# a reasonable overload bound so the sim still catches up without freezing

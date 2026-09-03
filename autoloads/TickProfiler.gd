@@ -86,6 +86,11 @@ var cat_ai_agent_update: int = 0
 var cat_ai_maintenance: int = 0
 var cat_ai_total: int = 0
 
+## Per-listener callback timing (microseconds), keyed by node path / listener
+## name. Fed by TickManager._dispatch_tickable/_dispatch_refcounted via
+## record_callback(). Read via get_callback_profile(). Diagnostic only.
+var cat_callback_us: Dictionary = {}
+
 # ── Main dispatch ──
 var cat_main_dispatch: int = 0
 
@@ -222,6 +227,20 @@ func record_counter(counter: String, delta: int = 1) -> void:
 func record_ai_agent(us: int) -> void:
 	if not _profile_sim_enabled: return
 	cat_ai_total += us
+
+
+## Per-callback time (microseconds) accumulation, keyed by listener name/path.
+## Called by TickManager for every tickable/refcounted listener when profiling
+## is enabled. Supersedes the previously-nonexistent method (fixed to stop the
+## script-error spam under --profile-sim) and feeds the F10 diagnostic layer.
+func record_callback(us: int, name: String) -> void:
+	if not _profile_sim_enabled: return
+	cat_callback_us[name] = int(cat_callback_us.get(name, 0)) + us
+
+
+## Read-only accessor: copy of the per-callback accumulators (us by listener).
+func get_callback_profile() -> Dictionary:
+	return cat_callback_us.duplicate()
 
 
 func record_ai_subcategory(cat: String, us: int) -> void:
@@ -401,6 +420,7 @@ func reset() -> void:
 	cnt_neural_evals = 0; cnt_worldmemory_queries = 0
 	cat_ai_world_ai = 0; cat_ai_settlement_ai = 0; cat_ai_agent_update = 0
 	cat_ai_maintenance = 0; cat_ai_total = 0; cat_main_dispatch = 0
+	cat_callback_us.clear()
 	cat_pawn_process = 0; cat_pawn_draw = 0
 	_pawn_process_samples = 0; _pawn_draw_samples = 0
 	vis_total_pawns = 0; vis_pawns_ticking = 0; vis_pawns_process_active = 0

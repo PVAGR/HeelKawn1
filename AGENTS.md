@@ -716,3 +716,55 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 **Files modified:**
 - `scripts/pawn/HeelKawnian.gd` — `_job_claim_interval_for_speed()` -> return 1; `_expensive_decision_interval_for_speed()` -> return 1 (+comment); `_tick_working()` virtual_work_ticks capped at 4.0; `_phase_job_scan()` cooldown 60 -> 10.
 - `AGENTS.md` — this entry.
+
+
+---
+
+### 2026-09-03 - Session: opencode/big-pickle (Mature-Market 200x Idle-Scan Cost: Locate True Hot Kernel + TTL Cache Win)
+
+**Time:** ~UTC
+
+**What was done:**
+
+1. **Located the TRUE mature-world hot kernel with clean per-stage data (PAWN_DISPATCH_STAGES).** Added a `_dump_dispatch()` stage dump to `tools/diag_aged_profile.gd` that reads `HeelKawnian.get_pd_snapshot_for_diagnostics()` (already present, never printed). Clean 30k+ idle-dispatch breakdown over 1500 aged-save ticks (200x, fenced):
+   - `dispatch/IDLE` total 85.98s, avg 2813us
+   - `idle/resume_pipeline` total 67.5s, avg 3001us (n=22,505) <- dominant
+   - `idle/util_build_context` total 67.7s, avg 2248us (n=30,123) <- overlaps resume_pipeline (nested markers)
+   - `idle/lanes` 8.3s, `idle/foodcache` 5.25s, `idle/needs` 1.45s
+   - `idle/utility_social` avg 26us (the 09-02 "~11ms" hotspot is already gone)
+   - `idle/jobscan_gate` avg 0us (job-scan scoring is NOT the bottleneck)
+   **Conclusion:** the cost is the resumable idle-decision pipeline's BUILD_CONTEXT phase = `_build_idle_utility_context` -> `parity_idle_context` -> `WorldAI.build_idle_parity_context_for_pawn` -> `get_pawn_neural_state` (the full per-pawn neural resolve). NOT the job scan. This corrected the 09-02 era assumption that job-scan scoring was the target.
+
+2. **Root-caused the neural resolve cost at instruction level (NEURAL_CACHE_PROFILE read-back added to `_dump_dispatch`).** With `--profile-pawn-dispatch`, WorldAI's B1 cache counters showed over 1500 ticks: `_nc_compute_us=52.87s`, `compute_count=4171`, of which `_nc_miss_ttl=3418` (TTL-expiry, 82% of computes!) are TTL-only re-resolves where the sig did NOT change during the window. Split: `_nc_forward_us=31.06s` (neural forward) + `_nc_rule_context_us=21.31s` (decision-rule context). The 02A B1 TTL of 8 ticks was far too aggressive for a ~12ms resolve.
+
+3. **THE WIN: raised `NEURAL_STATE_CACHE_TTL_TICKS` 8 -> 128** (`scripts/ai/WorldAI.gd`). Pure deterministic cache-retention change (B1 already proved the cache mechanism deterministic: skipped draws cannot reorder later WorldRNG draws because they are stateless pure `index_for` hashes). 128 ticks = longer stale-window bound for slow-moving macro inputs (pressures/weather/founding), while the need-bucket/region/center/scar **sig still forces immediate re-resolve** on fast-changing inputs. Measured:
+   - Neural compute 52.87s -> 20.2s (compute_count 4171 -> 1185; TTL misses 3418 -> 126). Remaining computes now dominated by sig misses (1035).
+   - `dispatch/IDLE` 85.98s -> 69.4s; `idle/util_build_context` total 67.7s -> 47.2s; `idle/resume_pipeline` 67.5s -> 47.0s.
+   - **Clean A/B (no profile flags, same 1500-tick window, every other change identical): TTL=8 = 114s elapsed; TTL=128 = 90s elapsed -> ~21% mature-world throughput improvement.**
+   - Bounded fresh worlds unchanged (2-4ms ticks); the answer to the task's "reduce idle-scan cost" for the mature colony is the neural-context TTL, not the job scan.
+
+4. **Determinism analyzed & isolated (decisive).** Two `--fixed-fps 60` runs of `tools/diag_determinism.gd` diverge at every anchor (500/1000/1500/2000) -- but they diverge IDENTICALLY with TTL=8 (my change reverted; prior-session + my-memo tree intact) as with TTL=128. **Conclusion: the divergence is the PRE-EXISTING 02A frame-coupling (pawn `_process` writes `data.tile_pos` from a delta-based step, HeelKawnian.gd ~L3625), NOT the TTL change.** My TTL change is deterministic-neutral (both values diverge identically under the harness; the reset is covered by B1's purity proof + the sig guard). The current tree does not reproduce OB-A's bit-identical fixed-FPS claim for the full multirate+stall-fixed world; that remains a known base limitation, not introduced here.
+
+5. **Idle-scan job-scan cost (this session's secondary work, kept).** `HeelKawnian._phase_job_scan()` gained local, purity-neutral memoizations: type/tile-keyed `goal_prio_cache`/`short_horizon_cache`/`learning_weight_cache`/`social_influence_issuer_cache` + `ruler_proximity_pc`/`ruler_proximity_computed` (all local vars reset per call), plus `priority_memo`/`memo_priority_cb` wrapping the ~250-line `priority_cb` closure, and the 4 claim scans (matrix/food/goal/fallback) now call the memoizing wrapper. All locals -> cannot change results (only skip redundant recompute), no cross-tick staleness. Pawns still work (highspeed PASS). The job-scan was NOT the dominant cost (jobscan_gate avg 0us), so these are correctness-safe but modest contributors vs the TTL win.
+
+6. **Permanent Tool Rule honored end-to-end.** `--playtest-no-save` present on every Main-booting tool; `[PLAYTEST] SAVE WRITES DISABLED` printed; production autosave SHA-256 `6CFB204C6FCBB379847DAC56240FD321D182F058F8F0F97E3F0EE1F904DF55E2` verified byte-identical before and after every fenced run (incl. highspeed, both determinism runs, f10 regression, chronicle, settlement-gate, aged-profile runs). No tool wrote it.
+
+**Verification (fence `--playtest-no-save`, production autosave untouched):**
+- `diag_parse_check.gd` -> all 7 configured targets OK (CreatorDebugMenu, HeelKawnian, SettlementMemory, Main, ColonySimServices, f10 regression, save_fence); WorldAI compiles + initializes cleanly (logged neural matrix init).
+- `diag_highspeed_pawns.gd` -> `RESULT=PASS` (fresh world): pawns WORK at 50x/100x/200x (24/24 working_or_walking, idle=0), `TICK_DELTA_MONOTONIC_INCREASING=true` (the 09-02 200x stall fix holds).
+- `f10_live_data_regression.gd` -> FULL PASS (16 report builders, consistency contract, spatial centers, selection id=1 tile=(14,11) Working, deselect, F10_READ_ONLY tick=20 unchanged).
+- `chronicle_contract_regression.gd` -> `[CHRON_REGRESS] OK` (real runtime path).
+- `diag_settlement_gate.gd` -> reached tick 5439 then hit its FRAME_CAP before the 12000 formalization target (tool-timeout limitation of the heavy 200x tree, not a formalization failure: no `not_evaluated`, no errors; stopped below the tick-6000 autosave boundary). Settlement formalization point at tick ~12000 is covered by the prior 09-02 session and is not gated by neural-refresh cadence.
+
+**Files modified:**
+- `scripts/ai/WorldAI.gd` -- `NEURAL_STATE_CACHE_TTL_TICKS` 8 -> 128 (the mature-world throughput win).
+- `scripts/pawn/HeelKawnian.gd` -- `_phase_job_scan()` local memo caches + `priority_memo`/`memo_priority_cb` + memoizing wrapper helpers (`_goal_priority_bias_for_job_cached`, `_short_horizon_bias_for_job_cached`, `_learning_weight_for_job_cached`, `_apply_social_influence_bias_cached`) + 4 claim-scan call sites -> memo wrapper.
+- `autoloads/TickProfiler.gd` -- `record_callback(us, name)` + `cat_callback_us` + `get_callback_profile()` (fixes the missing-method bug under `--profile-sim`; working-tree diff, present pre-session).
+- `tools/diag_aged_profile.gd` -- `_dump_dispatch()` (+NEURAL_CACHE_PROFILE read-back) for the clean per-stage + neural-cache dump; `TARGET_DELTA` restored 1500 -> 6000 after iteration.
+- `AGENTS.md` -- this entry.
+
+**Known remaining / notes:**
+- The residual mature-world cost after the TTL win is `_nc_rule_context_us` (10.99s) + `_nc_forward_us` (9.07s) on sig-driven re-resolves; next lever is coarsening the need-bucket sig stride (12.5 -> 25) OR short-circuiting `_pawn_decision_rule_context` macro lookups -- NOT done (behavioral fidelity risk; deferred).
+- `claim_next_for` remains O(N) per first scan of a decision (76 open jobs in the aged save); the priority_cb memo dedups across the 4 scans but the first scan still pays full cost. A per-decision eager precompute or per-job-id global memo could reduce further (play-behavior risk with stale cross-pawn values; deferred).
+- The speed-independent 6ms `SIM_SLICE_BUDGET_USEC` slice is why 200x==100x in cheap fresh worlds"; separate from the mature per-tick cost; not addressed this session (user chose idle-scan cost, not the slice).
+- Pre-existing 1x determinism frame-coupling (`data.tile_pos` delta-based `_process` write) remains; both TTL=8 and TTL=128 diverge identically under `--fixed-fps 60`; fixing the frame-coupled tile write is a future cross-cut.

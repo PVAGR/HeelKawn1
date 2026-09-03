@@ -908,14 +908,19 @@ func compute_settlement_build_priorities(
 	var housing_press: float = get_housing_pressure()
 	var storage_press: float = get_storage_pressure(center_region)
 	var cooking_press: float = get_cooking_pressure(center_region)
-	var hearths_needed: int = 0
-	if hearths <= 0 and local_pop > 0:
-		hearths_needed = 1
-	elif cold_uncovered > 0:
-		hearths_needed = hearths + int(ceil(float(cold_uncovered) / 4.0))
-	elif warmth_press >= 0.12 and local_pop > 0:
-		hearths_needed = maxi(hearths_needed, hearths + 1)
-	var warmth_satisfied: bool = hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12
+	# Hearth demand is a POPULATION-SCALED TARGET (1 hearth per ~4 residents,
+	# matching HEARTH_COVERAGE_RADIUS=2), never a ratchet stacked on the current
+	# built count. Previously this computed `hearths + ceil(cold/4)`, which grew
+	# unboundedly every pass when cold never resolved, causing endless fire-pit
+	# spam. A hard cap bounds demand so repeated recompute cannot ratchet it up.
+	var pop_for_hearths: int = local_pop if local_pop >= 1 else maxi(1, _population_in_scope(center_region))
+	var hearth_cap: int = maxi(1, int(ceil(float(pop_for_hearths) / 4.0)))
+	var hearths_needed: int = hearth_cap
+	if cold_uncovered > 0:
+		hearths_needed = maxi(hearths_needed, hearth_cap)
+	hearths_needed = clampi(hearths_needed, 1, hearth_cap)
+	var warmth_satisfied: bool = (hearths >= hearths_needed) \
+			or (hearths > 0 and cold_uncovered <= 0 and warmth_press < 0.12)
 	var survival_met: bool = food_press <= 0.60 and housing_press <= 0.70 and warmth_press <= 0.40
 	var need_beds: int = 0
 	if housing_press > 0.35:
@@ -1041,17 +1046,21 @@ func count_pending_fire_pits_in_region(center_region: int, radius: int = 16) -> 
 
 
 ## How many hearths the region still needs (cold coverage, not pop/4 per hamlet).
+## Population-capped so it never ratchets with cold alone (fixes fire-pit spam).
 func regional_hearths_needed(center_region: int) -> int:
 	var pop: int = _population_in_scope(center_region)
 	if pop <= 0:
 		return 0
 	var built: int = _hearth_count_for_scope(center_region)
 	var cold: int = count_cold_uncovered_pawns(center_region)
+	# Never want more hearths than 1 per ~4 residents, so repeated recompute of
+	# `built + ceil(cold/4)` above can no longer grow the target forever.
+	var cap: int = maxi(1, int(ceil(float(pop) / 4.0)))
 	if built <= 0:
 		return 1
 	if cold <= 0:
-		return built
-	return built + int(ceil(float(cold) / 4.0))
+		return mini(built, cap)
+	return clampi(built + int(ceil(float(cold) / 4.0)), 1, cap)
 
 
 ## Gate fire-pit posts so N settlements in one region do not each flood duplicate pits.

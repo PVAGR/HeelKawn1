@@ -7226,6 +7226,52 @@ func _get_cached_feature_scan(region_key: int, center_tile: Vector2i, radius: in
 	return features
 
 
+## Pick a build tile for a new fire pit that actually covers a cold resident.
+## A hearth only reduces `cold_uncovered` if it lands within HEARTH_COVERAGE_RADIUS
+## of a cold pawn; posting near the settlement center scatters pits that never
+## resolve cold, which (with the old unbounded demand) drove endless fire pits.
+## Prefers a tile adjacent to a cold-uncovered pawn in this settlement, extended
+## toward center / existing structure; falls back to the old near-center pick.
+func _find_fire_pit_cover_tile(center_tile: Vector2i, center_rk: int, radius: int) -> Vector2i:
+	if _world == null or _world.data == null or _world.pathfinder == null:
+		return Vector2i(-1, -1)
+	var main_component: int = _world.pathfinder.largest_component_id()
+	var center_region: int = center_rk
+	var candidates: Array = []
+	for p in PawnAccess.find_alive_pawns():
+		if p == null or not is_instance_valid(p) or p.data == null:
+			continue
+		var tile: Vector2i = p.data.tile_pos
+		var pk: int = WorldMemory._region_key(tile.x, tile.y)
+		if SettlementMemory.get_center_region_for_region(pk) != center_region:
+			continue
+		if not ColonySimServices.has_method("tile_has_hearth_coverage"):
+			continue
+		if bool(ColonySimServices.call("tile_has_hearth_coverage", tile)):
+			continue
+		candidates.append(tile)
+	if candidates.is_empty():
+		return _find_build_tile_near(center_tile, radius)
+	# Prefer the candidate closest to the settlement center (compact growth), and
+	# the center-most is where existing structures concentrate.
+	candidates.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.distance_squared_to(center_tile) < b.distance_squared_to(center_tile)
+	)
+	for anchor in candidates:
+		for r in range(1, 3):
+			for y in range(-r, r + 1):
+				for x in range(-r, r + 1):
+					if abs(x) != r and abs(y) != r:
+						continue
+					var t: Vector2i = anchor + Vector2i(x, y)
+					if not _is_valid_seeder_build_tile(t, main_component, false):
+						continue
+					if JobManager.has_job_at(t):
+						continue
+					return t
+	return _find_build_tile_near(center_tile, radius)
+
+
 func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 	if _world == null or _world.data == null:
 		return
@@ -7424,7 +7470,7 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 			if may_post_fire:
 				# Require some local materials before posting a new fire pit job for larger settlements
 				if stock_wood + stock_stone > 0 or local_pop <= 6:
-					var t: Vector2i = _find_build_tile_near(center_tile, 4)
+					var t: Vector2i = _find_fire_pit_cover_tile(center_tile, center_rk, 4)
 					if t.x >= 0 and not JobManager.has_job_at(t):
 						var j: Job = _post_seeded_job(Job.Type.BUILD_FIRE_PIT, t, 9, 12, "warmth_coverage", "settlement", center_rk)
 						if j != null:
@@ -7470,6 +7516,33 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		var need_beds: int = int(build_priorities.get("need_beds", 0))
 		var pending_beds: int = int(pending_by_type.get(Job.Type.BUILD_BED, 0))
 		var beds_posted_p3: int = 0
+		# Coherent residential construction: when residents actually lack homes, prefer
+		# building a HOUSE (beds + integrated hearth + wall/door enclosure) over
+		# scattering isolated bed jobs. This makes dwellings form compact local clusters
+		# near the settlement center instead of random single beds, and gives each
+		# home its own hearth + perimeter so residents gain real shelter (beds get
+		# claimed -> pawns get reserved_bed homes). No fixed build order; housing
+		# pressure alone decides when this category activates.
+		if housing_press > 0.35 and need_beds > 0 and beds + pending_beds < need_beds \
+				and not seeding_proto \
+				and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
+			var bed_deficit: int = need_beds - beds - pending_beds
+			var house_beds: int = clampi(bed_deficit, 1, 4)
+			var house_posts: int = _post_house_blueprint_jobs(center_tile, house_beds, job_cap - jobs_this_settlement)
+			if house_posts > 0:
+				posted += house_posts
+				jobs_this_settlement += house_posts
+				# Beds always post first in a house blueprint; the remainder is the
+				# integrated hearth (1) and wall/door enclosure that make it a dwelling.
+				beds_posted_p3 = mini(house_beds, house_posts)
+				for _ri in range(house_posts):
+					_seeder_track_post(center_rk, job_cap)
+				pending_counts[Job.Type.BUILD_BED] = int(pending_counts.get(Job.Type.BUILD_BED, 0)) + beds_posted_p3
+				pending_counts[Job.Type.BUILD_FIRE_PIT] = int(pending_counts.get(Job.Type.BUILD_FIRE_PIT, 0)) + (1 if house_posts > house_beds else 0)
+				pending_counts[Job.Type.BUILD_WALL] = int(pending_counts.get(Job.Type.BUILD_WALL, 0)) + maxi(0, mini(3, house_posts - house_beds - (1 if house_posts > house_beds else 0)))
+				pending_counts[Job.Type.BUILD_DOOR] = int(pending_counts.get(Job.Type.BUILD_DOOR, 0)) + (1 if house_posts > house_beds + 3 else 0)
+		# Residual single beds only where house plumbing is exhausted but the housing
+		# deficit remains (e.g., too many beds for one cluster, no house anchor site).
 		while beds + pending_beds + beds_posted_p3 < need_beds and beds_posted_p3 < 2 and _seeder_has_build_slot(center_rk, jobs_this_settlement, job_cap):
 			var t: Vector2i = _find_build_tile_near(center_tile, 4)
 			if t.x >= 0 and not JobManager.has_job_at(t):

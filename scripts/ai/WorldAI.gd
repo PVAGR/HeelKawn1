@@ -201,7 +201,7 @@ var _cached_pawn_spawner: WeakRef = null
 ## reads (ColonySimServices pressures, WorldMeaning tags, founding blend,
 ## weather, work toggles, affinities) is macro/slow-moving and bounded by the
 ## ever-present tick TTL below, keeping the stale window small.
-const NEURAL_STATE_CACHE_TTL_TICKS: int = 8
+const NEURAL_STATE_CACHE_TTL_TICKS: int = 128
 var _pawn_neural_cache: Dictionary = {}
 
 ## Gated neural-cache profiler counters (--profile-pawn-dispatch).

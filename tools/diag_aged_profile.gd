@@ -187,7 +187,83 @@ func _dump() -> void:
 	print("=== AGED_PROFILE dump @tick=%d ===" % _tick())
 	_dump_settlements()
 	_dump_starvation()
+	_dump_tickprofiler()
+	_dump_dispatch()
 	print("=== AGED_PROFILE dump end ===")
+
+func _dump_dispatch() -> void:
+	var hg: GDScript = load("res://scripts/pawn/HeelKawnian.gd") as GDScript
+	if hg == null:
+		return
+	if not hg.has_method("get_pd_snapshot_for_diagnostics"):
+		return
+	var snap: Dictionary = hg.call("get_pd_snapshot_for_diagnostics")
+	var agg: Dictionary = snap.get("agg", {})
+	var rows: Array = []
+	for st in agg:
+		var e: Array = agg[st]
+		rows.append([int(e[0]), st, int(e[1])])
+	rows.sort_custom(func(a, b): return int(a[0]) > int(b[0]))
+	print("PAWN_DISPATCH_STAGES (total_us n avg_us)")
+	for r in rows.slice(0, 30):
+		var avg: int = (int(r[0]) / int(r[2])) if int(r[2]) > 0 else 0
+		print("  %-26s n=%-6d total=%-10d avg=%d" % [r[1], int(r[2]), int(r[0]), avg])
+	var wai: Node = _al("WorldAI")
+	if wai != null:
+		const SPLIT_KEYS: Array[String] = [
+			"_nc_hits", "_nc_miss_ttl", "_nc_miss_sig", "_nc_compute_count", "_nc_compute_us",
+			"_nc_input_vector_us", "_nc_forward_us", "_nc_rule_context_us", "_nc_rule_eval_us",
+			"_nc_output_nudge_us", "_nc_result_cache_write_us",
+		]
+		var line: String = "NEURAL_CACHE_PROFILE"
+		for k in SPLIT_KEYS:
+			if wai.get(k) is int:
+				line += " %s=%d" % [k, int(wai.get(k))]
+		print(line)
+		wai.set("_nc_hits", 0)
+		wai.set("_nc_miss_ttl", 0)
+		wai.set("_nc_miss_sig", 0)
+		wai.set("_nc_compute_count", 0)
+		wai.set("_nc_compute_us", 0)
+		wai.set("_nc_input_vector_us", 0)
+		wai.set("_nc_forward_us", 0)
+		wai.set("_nc_rule_context_us", 0)
+		wai.set("_nc_rule_eval_us", 0)
+		wai.set("_nc_output_nudge_us", 0)
+		wai.set("_nc_result_cache_write_us", 0)
+
+func _dump_tickprofiler() -> void:
+	var tp = _al("TickProfiler")
+	if tp == null:
+		return
+	print("TP window_count=%d" % (tp.get("_window_count") if tp.get("_window_count") != null else -1))
+	for cat in [
+		"cat_bookkeeping", "cat_needs", "cat_survival_health", "cat_cognition",
+		"cat_awareness", "cat_matrix_ai", "cat_social", "cat_household",
+		"cat_settlement", "cat_state_dispatch", "cat_misc", "cat_total_heelkawnian",
+		"cat_ai_world_ai", "cat_ai_settlement_ai", "cat_ai_agent_update", "cat_ai_maintenance", "cat_ai_total",
+	]:
+		print("TP %s=%d" % [cat, int(_jk(tp, cat, 0))])
+	for cat in [
+		"idle_social_us", "idle_job_search_us", "idle_job_scoring_us", "idle_job_claim_us",
+		"idle_pathfinding_us", "idle_awareness_us", "idle_matrix_ai_us", "idle_cognition_us",
+		"idle_emergency_us", "idle_food_us", "idle_rest_us", "idle_wander_us", "idle_misc_us",
+	]:
+		print("TP %s=%d" % [cat, int(_jk(tp, cat, 0))])
+	for st in [
+		"st_idle_calls", "st_idle_us", "st_working_calls", "st_working_us",
+		"st_walking_calls", "st_walking_us", "st_eating_calls", "st_eating_us",
+		"st_sleeping_calls", "st_sleeping_us",
+	]:
+		print("TP %s=%d" % [st, int(_jk(tp, st, 0))])
+	var cb: Dictionary = tp.get_callback_profile() if tp.has_method("get_callback_profile") else {}
+	if not cb.is_empty():
+		var rows: Array = []
+		for k in cb:
+			rows.append([k, int(cb[k])])
+		rows.sort_custom(func(a, b): return a[1] > b[1])
+		for r in rows.slice(0, 25):
+			print("TPCB %8dus  %s" % [r[1], r[0]])
 
 func _dump_settlements() -> void:
 	var sm = _al("SettlementMemory")

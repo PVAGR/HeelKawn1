@@ -4887,6 +4887,43 @@ func _phase_job_scan() -> void:
 	var utility_cache: Dictionary = {}
 	var utility_bias_cache: Dictionary = {}
 	var neural_bias_cache: Dictionary = {}
+	# PERF: additional read-only per-decision memos the priority_cb below repeats
+	# for every open job on every one of the ~4 claim_next_for scans of this
+	# decision (matrix / food / goal / fallback). Cached once per (pawn, decision)
+	# keyed by whatever uniquely determines the value, so repeated world/
+	# settlement/path/resource lookups are NOT recomputed per candidate job/per scan.
+	var matrix_bias_cache: Dictionary = {}
+	var personal_conf_cache: Dictionary = {}
+	var kinship_prio_cache: Dictionary = {}
+	var settlement_id_region_cache: Dictionary = {}
+	var ground_res_cache: Dictionary = {}
+	var zone_forage_cache: Dictionary = {}
+	var zone_build_cache: Dictionary = {}
+	var zone_defend_cache: Dictionary = {}
+	var zone_territory_cache: Dictionary = {}
+	# PERF: type-only and pawn-constant memoization for the remaining per-job
+	# biases that the priority_cb recomputes for every open job on every one of
+	# the ~4 claim_next_for scans of this decision. These are pure read-only
+	# lookups whose inputs (job.type, job.work_tile, issuer_id, pawn state) are
+	# stable for the whole _phase_job_scan() call, so memoizing per decision
+	# yields the same bias values as re-evaluating, without the repeated cost.
+	var goal_prio_cache: Dictionary = {}
+	var learning_weight_cache: Dictionary = {}
+	var short_horizon_cache: Dictionary = {}
+	var social_influence_issuer_cache: Dictionary = {}
+	var ruler_proximity_pc: int = 0
+	var ruler_proximity_computed: bool = false
+	if data != null:
+		var _rsid: int = SettlementMemory.get_settlement_id_for_pawn(int(data.id)) if SettlementMemory != null else -1
+		if _rsid >= 0:
+			var _rruler: int = SettlementMemory.get_ruler_pawn_id(_rsid) if SettlementMemory != null else -1
+			if _rruler >= 0 and _rruler != int(data.id):
+				var _ruler_data: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(_rruler)
+				if _ruler_data != null:
+					var _rdist: int = absi(data.tile_pos.x - _ruler_data.tile_pos.x) + absi(data.tile_pos.y - _ruler_data.tile_pos.y)
+					if _rdist <= 10:
+						ruler_proximity_pc = int(round(clampf(_ruler_data.influence / 100.0, 0.0, 1.0) * 3.0))
+						ruler_proximity_computed = true
 	var affinity_key: String = data.highest_affinity_skill() if data != null else ""
 	var crisis_housing_pressure: float = 0.0
 	var crisis_food_pressure: float = 0.0
@@ -5004,15 +5041,25 @@ func _phase_job_scan() -> void:
 			utility_bias = int(round((_utility_score_normalized(action_key, utility_context, utility_cache) - 0.5) * float(UTILITY_JOB_PRIORITY_BIAS_RANGE)))
 			utility_bias_cache[action_key] = utility_bias
 		base_bias += utility_bias
-		base_bias += data.kinship_job_priority_bonus(j.work_tile)
-		base_bias += _goal_priority_bias_for_job(j.type)
-		base_bias += _short_horizon_bias_for_job(j)
-		var personal_conf: float = data.personal_confidence_for_job(int(j.type))
+		if kinship_prio_cache.has(j.work_tile):
+			base_bias += int(kinship_prio_cache[j.work_tile])
+		else:
+			var _kprio: int = data.kinship_job_priority_bonus(j.work_tile)
+			kinship_prio_cache[j.work_tile] = _kprio
+			base_bias += _kprio
+		base_bias += _goal_priority_bias_for_job_cached(j.type, goal_prio_cache)
+		base_bias += _short_horizon_bias_for_job_cached(j, short_horizon_cache)
+		var personal_conf: float = 0.0
+		if personal_conf_cache.has(j.type):
+			personal_conf = float(personal_conf_cache[j.type])
+		else:
+			personal_conf = data.personal_confidence_for_job(int(j.type))
+			personal_conf_cache[j.type] = personal_conf
 		if personal_conf < 0.3:
 			base_bias -= 3
 		elif personal_conf > 0.7:
 			base_bias += 2
-		var learning_weight: float = _learning_weight_for_job(j.type)
+		var learning_weight: float = _learning_weight_for_job_cached(j.type, learning_weight_cache)
 		if absf(learning_weight - 1.0) >= 0.01:
 			base_bias += int(round((learning_weight - 1.0) * 4.0))
 		if _idle_decision_result == "forage" and (j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.FISH):
@@ -5104,7 +5151,12 @@ func _phase_job_scan() -> void:
 			if _world != null and _world.has_method("sum_ground_resources"):
 				var center_rk2: int = SettlementMemory.get_center_region_for_region(
 						WorldMemory._region_key(data.tile_pos.x, data.tile_pos.y)) if SettlementMemory != null else -1
-				var ground: Dictionary = _world.sum_ground_resources(center_rk2)
+				var ground: Dictionary
+				if ground_res_cache.has(center_rk2):
+					ground = ground_res_cache[center_rk2] as Dictionary
+				else:
+					ground = _world.sum_ground_resources(center_rk2)
+					ground_res_cache[center_rk2] = ground
 				var ground_food: int = int(ground.get("food", 0))
 				if ground_food >= 2 and j.type == _Job.Type.TRADE_HAUL:
 					base_bias += clampi(mini(5, ground_food / 2), 2, 5)
@@ -5127,8 +5179,13 @@ func _phase_job_scan() -> void:
 			neural_bias = _get_neural_job_priority_bias(j.type)
 			neural_bias_cache[j.type] = neural_bias
 		base_bias += neural_bias
-		base_bias += _get_heelkawnian_matrix_job_bias(j.type)
-		base_bias = _apply_social_influence_bias(j, base_bias)
+		if matrix_bias_cache.has(j.type):
+			base_bias += int(matrix_bias_cache[j.type])
+		else:
+			var _mxb: int = _get_heelkawnian_matrix_job_bias(j.type)
+			matrix_bias_cache[j.type] = _mxb
+			base_bias += _mxb
+		base_bias = _apply_social_influence_bias_cached(j, base_bias, social_influence_issuer_cache, ruler_proximity_pc, ruler_proximity_computed)
 		var meaning_bias: int = 0
 		var job_rk: int = int(resolve_region_key_for_work_tile.call(j.work_tile))
 		var job_tags: PackedStringArray = resolve_region_tags.call(job_rk)
@@ -5289,22 +5346,50 @@ func _phase_job_scan() -> void:
 		base_bias += meaning_bias
 		var zone_bias: int = 0
 		var job_tile: Vector2i = j.work_tile
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.FORAGE):
+		var _in_forage: bool
+		if zone_forage_cache.has(job_tile):
+			_in_forage = zone_forage_cache[job_tile]
+		else:
+			_in_forage = ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.FORAGE)
+			zone_forage_cache[job_tile] = _in_forage
+		if _in_forage:
 			if j.type == _Job.Type.FORAGE or j.type == _Job.Type.HUNT or j.type == _Job.Type.PLANT_SEEDS or j.type == _Job.Type.HARVEST_CROPS or j.type == _Job.Type.FISH:
 				zone_bias += 6
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD):
+		var _in_build: bool
+		if zone_build_cache.has(job_tile):
+			_in_build = zone_build_cache[job_tile]
+		else:
+			_in_build = ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.BUILD)
+			zone_build_cache[job_tile] = _in_build
+		if _in_build:
 			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH:
 				zone_bias += 6
 		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.DEFEND):
 			if j.type == _Job.Type.DEFEND or j.type == _Job.Type.PROTECT:
 				zone_bias += 6
-		if ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY):
+		var _in_territory: bool
+		if zone_territory_cache.has(job_tile):
+			_in_territory = zone_territory_cache[job_tile]
+		else:
+			_in_territory = ZoneRegistry.tile_in_zone_type(job_tile, ZoneRegistry.ZoneType.TERRITORY)
+			zone_territory_cache[job_tile] = _in_territory
+		if _in_territory:
 			if j.type == _Job.Type.BUILD_BED or j.type == _Job.Type.BUILD_WALL or j.type == _Job.Type.BUILD_DOOR or j.type == _Job.Type.BUILD_FIRE_PIT or j.type == _Job.Type.BUILD_STORAGE_HUT or j.type == _Job.Type.BUILD_STOCKPILE or j.type == _Job.Type.BUILD_SHELTER or j.type == _Job.Type.BUILD_HEARTH or j.type == _Job.Type.FORAGE or j.type == _Job.Type.CHOP or j.type == _Job.Type.MINE or j.type == _Job.Type.MINE_WALL:
 				zone_bias += 4
 		base_bias += zone_bias
-		var my_sid_pc: int = SettlementMemory.get_settlement_id_for_region(from_region_key)
+		var my_sid_pc: int
+		if settlement_id_region_cache.has(from_region_key):
+			my_sid_pc = settlement_id_region_cache[from_region_key]
+		else:
+			my_sid_pc = SettlementMemory.get_settlement_id_for_region(from_region_key)
+			settlement_id_region_cache[from_region_key] = my_sid_pc
 		if my_sid_pc >= 0:
-			var job_sid_pc: int = SettlementMemory.get_settlement_id_for_region(job_rk)
+			var job_sid_pc: int
+			if settlement_id_region_cache.has(job_rk):
+				job_sid_pc = settlement_id_region_cache[job_rk]
+			else:
+				job_sid_pc = SettlementMemory.get_settlement_id_for_region(job_rk)
+				settlement_id_region_cache[job_rk] = job_sid_pc
 			if job_sid_pc >= 0 and job_sid_pc == my_sid_pc:
 				base_bias += 5
 			elif job_sid_pc >= 0 and job_sid_pc != my_sid_pc:
@@ -5369,8 +5454,23 @@ func _phase_job_scan() -> void:
 				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
 					return false
 		return true
+	# PERF: memoize the full priority_cb result per open job for THIS decision.
+	# The same open jobs are re-scanned by the ~4 claim_next_for calls (matrix /
+	# food / goal / fallback) of this decision, and priority_cb's inputs (job,
+	# pawn data, world pressures) are stable across them, so evaluating it once
+	# per job id and reusing the score across scans is behaviorally identical
+	# while removing the 250-line body from the 2nd-4th passes. The merged
+	# profession/reactive bonuses still apply on every scan (they are added by
+	# the merge wrapper outside of priority_cb).
+	var priority_memo: Dictionary = {}
+	var memo_priority_cb: Callable = func(j: Job) -> int:
+		if priority_memo.has(int(j.id)):
+			return int(priority_memo[int(j.id)])
+		var _pcb: int = priority_cb.call(j)
+		priority_memo[int(j.id)] = _pcb
+		return _pcb
 	# MATRIX DECISION
-	if _maybe_matrix_decide_job(priority_cb, base_passes):
+	if _maybe_matrix_decide_job(memo_priority_cb, base_passes):
 		_finish_idle_decision_pipeline(t0)
 		return
 	if food_emergency:
@@ -5380,7 +5480,7 @@ func _phase_job_scan() -> void:
 			if j.type != _Job.Type.FORAGE and j.type != _Job.Type.HUNT and j.type != _Job.Type.FISH:
 				return false
 			return base_passes.call(j)
-		var food_job: Job = JobManager.claim_next_for(self, food_only, priority_cb)
+		var food_job: Job = JobManager.claim_next_for(self, food_only, memo_priority_cb)
 		if food_job != null:
 			_begin_job(food_job)
 			_finish_idle_decision_pipeline(t0)
@@ -5421,7 +5521,7 @@ func _phase_job_scan() -> void:
 	var _rjp_cs = ColonySimServices if ColonySimServices != null else null
 	var reactive_bonus: Callable = func(j: Job) -> int:
 		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
-	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus), reactive_bonus))
+	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(memo_priority_cb, profession_bonus), reactive_bonus))
 	if job != null:
 		_begin_job(job)
 		_finish_idle_decision_pipeline(t0)
@@ -5432,7 +5532,7 @@ func _phase_job_scan() -> void:
 	var _rjp_cs2 = ColonySimServices if ColonySimServices != null else null
 	var reactive_bonus2: Callable = func(j: Job) -> int:
 		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world2, _rjp_cs2))
-	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(priority_cb, profession_bonus2), reactive_bonus2))
+	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(memo_priority_cb, profession_bonus2), reactive_bonus2))
 	if job2 != null:
 		_begin_job(job2)
 		if data != null and PawnCommunicationLog != null:
@@ -6341,6 +6441,31 @@ func _goal_priority_bias_for_job(job_type: int) -> int:
 	return 0
 
 
+## Memoizing wrapper for _goal_priority_bias_for_job: the value depends only on
+## job.type (and pawn state, which is stable within one _phase_job_scan), so it
+## is computed once per job type instead of once per job per scan.
+func _goal_priority_bias_for_job_cached(job_type: int, cache: Dictionary) -> int:
+	if cache.has(job_type):
+		return int(cache[job_type])
+	var v: int = _goal_priority_bias_for_job(job_type)
+	cache[job_type] = v
+	return v
+
+
+## Memoizing wrapper for _short_horizon_bias_for_job: the input (job.work_tile,
+## job.type, pawn short-term state) is stable within one _phase_job_scan, so the
+## result is cached per work tile across the ~4 scans of a decision.
+func _short_horizon_bias_for_job_cached(job: Job, cache: Dictionary) -> int:
+	if job == null:
+		return 0
+	var tile_key: String = "%d,%d" % [job.work_tile.x, job.work_tile.y]
+	if cache.has(tile_key):
+		return int(cache[tile_key])
+	var v: int = _short_horizon_bias_for_job(job)
+	cache[tile_key] = v
+	return v
+
+
 func _short_horizon_bias_for_job(job: Job) -> int:
 	if job == null or data == null:
 		return 0
@@ -6416,6 +6541,52 @@ func _learning_weight_for_job(job_type: int) -> float:
 	if _decision != null:
 		return _decision.learning_weight_for_job(job_type)
 	return 1.0
+
+
+## Memoizing wrapper for _learning_weight_for_job (type-only, decision-stable).
+func _learning_weight_for_job_cached(job_type: int, cache: Dictionary) -> float:
+	if cache.has(job_type):
+		return float(cache[job_type])
+	var v: float = _learning_weight_for_job(job_type)
+	cache[job_type] = v
+	return v
+
+
+## Memoized version of _apply_social_influence_bias: issuer-derived influence is
+## cached per issuer_pawn_id (decision-stable), and the leader-proximity bonus is
+## precomputed once for the whole decision (pawn + ruler state is fixed). Produces
+## identical bias values to _apply_social_influence_bias.
+func _apply_social_influence_bias_cached(job: Job, base_bias: int, issuer_cache: Dictionary, ruler_proxy: int, ruler_proxy_valid: bool) -> int:
+	if job == null or data == null:
+		return base_bias
+	var authority_hint: float = 0.0
+	var influence_bias: int = 0
+	var issuer_id: int = int(job.issuer_pawn_id)
+	if issuer_id >= 0:
+		if issuer_cache.has(issuer_id):
+			authority_hint = float(issuer_cache[issuer_id])
+		else:
+			var issuer_data: HeelKawnianData = HeelKawnianManager._pawn_data_for_id(issuer_id)
+			var hint: float = 0.0
+			if issuer_data != null:
+				hint = clampf(issuer_data.influence / 100.0, 0.0, 1.0)
+				if data.trust.has(issuer_id):
+					hint += clampf(float(data.trust[issuer_id]) / 120.0, 0.0, 0.8)
+				if data.family_bonds.has(issuer_id):
+					hint += clampf(float(data.family_bonds[issuer_id]) / 150.0, 0.0, 0.7)
+			authority_hint = hint
+			issuer_cache[issuer_id] = hint
+	var obedience_weight: float = 1.0
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+		obedience_weight = clampf(float(WorldAI.get_pawn_obedience_weight(int(data.id))), 0.5, 2.0)
+	if job.social_weight > 0.01:
+		authority_hint += clampf(float(job.social_weight), 0.0, 1.0) * 0.6
+	if authority_hint > 0.0:
+		influence_bias += int(round(authority_hint * obedience_weight * 3.0))
+	# Leader proximity bonus: precomputed for the whole decision.
+	if ruler_proxy_valid:
+		influence_bias += ruler_proxy
+	return base_bias + influence_bias
 
 
 func _idle_settlement_pressure() -> float:

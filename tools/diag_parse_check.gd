@@ -5,6 +5,7 @@ const TARGETS := [
 	"res://scripts/pawn/HeelKawnian.gd",
 	"res://autoloads/SettlementMemory.gd",
 	"res://scenes/main/Main.gd",
+	"res://autoloads/ColonySimServices.gd",
 	"res://tools/f10_live_data_regression.gd",
 	"res://tools/diag_save_fence.gd",
 ]

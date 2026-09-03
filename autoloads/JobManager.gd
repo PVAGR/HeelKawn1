@@ -465,6 +465,14 @@ var _claim_ctx_obedience: float = 1.0
 # every open job on every scan, and an idle decision scans ~4x. Memoize the
 # result per (pawn, tick) and reuse it across the scans of one decision.
 var _claim_vis_cache: Dictionary = {}
+# PERF: memoized list of open jobs that pass the social/visibility guard for the
+# current (pawn, tick) claim context. One idle decision calls `claim_next_for`
+# ~4x (matrix / food / goal / fallback); visibility is pawn+job invariant within
+# that decision, so we iterate only the (typically small) visible subset on each
+# scan instead of re-walking all N open jobs. Per-scan `filter`/`priority_bonus`
+# still gate each candidate inside the loop, so the winner is unchanged.
+var _claim_visible_list: Array = []
+var _claim_vis_list_ready: bool = false
 
 ## Return the best open job for this pawn, or null. "Best" = highest priority
 ## (plus optional `priority_bonus` offset), then Chebyshev distance. `filter`
@@ -494,8 +502,13 @@ func claim_next_for(
 		# Precompute visibility for all open jobs once (cheap dict fill); the scan
 		# loop below reuses it via a lookup instead of recomputing per job.
 		_claim_vis_cache = {}
+		_claim_visible_list = []
 		for _vj in _open:
-			_claim_vis_cache[_vj] = _job_visible_to_pawn_with_context(_vj, pawn, pd, pawn_ctx)
+			var _vj_vis: bool = _job_visible_to_pawn_with_context(_vj, pawn, pd, pawn_ctx)
+			_claim_vis_cache[_vj] = _vj_vis
+			if _vj_vis:
+				_claim_visible_list.append(_vj)
+		_claim_vis_list_ready = true
 	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
 	
 	# PROMPT 3: Profession-based early-out — when there are many open jobs (>50)
@@ -518,8 +531,15 @@ func claim_next_for(
 	# Cache per-type interest/tool bonuses: they depend only on (pawn, job type),
 	# not the job instance, so pay 2 method calls per type instead of per job.
 	var _type_bonus_cache: Dictionary = {}
-	for i in range(scan_jobs.size()):
-		var j: Job = scan_jobs[i]
+	# PERF: walk only the (small) visible-candidate subset computed once for this
+	# (pawn, tick) context instead of re-walking all N open jobs per scan, when a
+	# full vis list is available and we're not on a profession-narrowed pass where
+	# the narrowed set is not a subset of the visible list.
+	var walk_jobs: Array = scan_jobs
+	if _claim_vis_list_ready and scan_jobs.size() == _open.size():
+		walk_jobs = _claim_visible_list
+	for i in range(walk_jobs.size()):
+		var j: Job = walk_jobs[i]
 		# Enforce filter if provided
 		if use_filter and not filter.call(j):
 			continue
@@ -569,7 +589,7 @@ func claim_next_for(
 				pawn_id, _claim_elapsed, _open.size()
 			])
 		return null
-	var job: Job = scan_jobs[best_idx]
+	var job: Job = walk_jobs[best_idx]
 	# Find and remove from _open (scan_jobs may be a filtered copy)
 	var open_idx: int = _open.find(job)
 	if open_idx >= 0:

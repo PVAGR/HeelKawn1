@@ -4694,7 +4694,10 @@ func _apply_authoritative_discrete_frontier(frontier_seconds: float) -> bool:
 	if not _discrete_due_deadlines.is_empty():
 		var oldest_deadline: float = _discrete_due_deadlines[0]
 		if frontier_seconds - oldest_deadline > _DISCRETE_STUCK_DEADLINE_MAX_LAG:
-			_consume_discrete_decision()
+			# Evict, do NOT consume: the pipeline never ran, so this is not an applied
+			# decision. Pop the stale deadline; the empty-queue rule at line 4684 will
+			# advance applied-through to F on the next pass.
+			_discrete_due_deadlines.pop_front()
 			_discrete_decisions_evicted += 1
 			_next_decision_world_time = frontier_seconds
 	_discrete_decision_last_frontier = frontier_seconds
@@ -4873,6 +4876,15 @@ func _phase_job_scan() -> void:
 	# 10-tick cooldown check (was 60; at 200x, 60 ticks = 660 sim-seconds between scans)
 	var current_tick: int = now_tick
 	if current_tick - _last_job_search_tick < 10:
+		# Cooldown: skip the expensive job scan, but still offer a wander so an idle
+		# pawn is never a full fixed point. The wander salt already varies with
+		# GameManager.tick_count (_pawn_salt), so re-scoring each tick changes the draw.
+		var wanderlust_cd: float = lerpf(0.52, 1.68, _bp(3))
+		var skip_wander_chance_cd: float = WANDER_CHANCE_PER_TICK * wanderlust_cd
+		if _idle_decision_result == "wander":
+			skip_wander_chance_cd *= 1.6
+		if WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(skip_wander_chance_cd, 0.0, 0.35), _pawn_salt(11)):
+			_start_wander()
 		_finish_idle_decision_pipeline(t0)
 		return
 	_last_job_search_tick = current_tick

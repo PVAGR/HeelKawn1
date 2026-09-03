@@ -804,3 +804,33 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - After eviction, the pawn gets a fresh deadline at the current frontier, so it can recover naturally.
 - Determinism is preserved: purely tick-based threshold, no RNG, no frame coupling.
 - The `_discrete_decisions_evicted` counter in F10 diagnostics will signal when the watchdog is active.
+
+---
+
+### 2026-09-03 — Session: opencode/big-pickle (Deterministic Liveness: Wander on Job-Scan Cooldown + Watchdog Eviction-Not-Consumption)
+
+**Time:** ~UTC
+
+**Objective:** The 200× mature-world freeze. Fix = deterministic liveness: every idle pawn must get a genuine decision opportunity with changing RNG context every tick, so no pawn can sit in a permanent idle fixed point at any speed. Speed must only change how fast the observer sees time pass.
+
+**Root-cause discovery (static):** `_pawn_salt()` (HeelKawnian.gd:413-417) ALREADY returns `GameManager.tick_count + pawn_id*1009 + tile.x*131 + tile.y*17 + extra` — the wander RNG salt is already time-varying each tick (tick_count changes every compat tick). The user's "unchanged inputs → same stateless-chance boolean forever" hypothesis does NOT apply to the wander draw itself. The real idle-lock mechanism was:
+
+1. `_pawn_salt` DOES change per tick, so `WorldRNG.chance_for("idle_wander", …)` re-draws differently each tick. BUT the pawn only EVER reached the wander draw on the 10th-tick cadence (the `_last_job_search_tick` cooldown in `_phase_job_scan`, HeelKawnian.gd:4878). On the other 9 of every 10 ticks the pipeline was finishing at the cooldown early-return WITHOUT any wander. Net wander rate ≈ once per 10 ticks × ~5% ≈ 0.5% of ticks — far too sparse to break an idle lock, and a pawn with no suitable job could sit immobile intra-job-fixed-point.
+2. The cheap-wander lane inside `_tick_idle` (HeelKawnian.gd ~6373-6388) was effectively dead: `_discrete_decision_due()` is true essentially every tick (new deadline queued by the single-slot mechanism), so control always took the `_has_pending_idle_decision()` path and never reached the non-pipeline cheap wander.
+
+**Changes (both in `scripts/pawn/HeelKawnian.gd`):**
+
+1. **Wander offered on the job-scan cooldown (deterministic liveness).** In `_phase_job_scan()` at the 10-tick cooldown early-return, BEFORE finishing the pipeline, each pawn now draws its wander RNG (`WorldRNG.chance_for(_pawn_stream("idle_wander"), clampf(WANDER_CHANCE_PER_TICK*wanderlust,…), _pawn_salt(11))`, same formula as the post-scan wander at :5586, incl. the `_idle_decision_result=="wander"` ×1.6 boost) and calls `_start_wander()` on success. Because the salt varies with tick_count, the draw changes every cooldown tick → an idle pawn is never a permanent fixed point. On the 10th tick the full job scan runs (and claims the job BEFORE the wander fallback at :5551/:5561), so job-taking precedence is preserved. `_start_wander()` → `_start_path()` sets `_path` + `set_process(true)`; `_process()` (HeelKawnian.gd:4004) moves the pawn along `_path` regardless of `_state` — a cooldown wander visibly moves an IDLE pawn without changing its state machine.
+
+2. **Watchdog eviction, NOT consumption (semantic correctness fix to the 09-03 watchdog).** The prior `b0da2c1a` watchdog called `_consume_discrete_decision()` for a deadline whose decision never actually ran. That contradicted the stated invariant ("applied-through stays before the oldest unconsumed deadline / consumed only for real pipeline starts"): it bumped `_discrete_decisions_consumed` and called `_clear_scheduled_normal_deadline()` for a decision that never happened. Replaced with a true eviction: `_discrete_due_deadlines.pop_front()`, increment `_discrete_decisions_evicted` ONLY (not `_consumed`), reschedule `_next_decision_world_time = frontier_seconds`. Applied-through then advances to F via the existing empty-queue rule (HeelKawnian.gd:4684) on the next frontier pass, unblocking the pawn_discrete lane-min within one extra pass. Semantics: eviction ≠ consumption; the window passed and the pawn missed it, tracked honestly.
+
+**Permanent Tool Rule / verification:** user directive: NO Godot runs, NO simulations, code inspection + implementation only. `git diff scripts/pawn/HeelKawnian.gd` is a clean, minimal 14-line diff (9-line cooldown-wander block + 5-line watchdog change). Static review confirms every symbol used in the new cooldown block (`_bp(3)`, `_idle_decision_result`, `_start_wander`, `_finish_idle_decision_pipeline`, `_pawn_stream`, `_pawn_salt`, `WorldRNG.chance_for`, `WANDER_CHANCE_PER_TICK`, `lerpf`, `clampf`) is already in scope inside `_phase_job_scan` (identical usage at :5577-5587). No sim change to job priority, settlement growth, needs, or paths. User performs graphical playtest at 200× on the saved colony.
+
+**Files modified:**
+- `scripts/pawn/HeelKawnian.gd` — P2: cooldown-wander block in `_phase_job_scan()` (:4878); P1: watchdog `_consume_discrete_decision()` → pop_front + evicted-only (no consumed/clear) in `_apply_authoritative_discrete_frontier` (:4696).
+- `AGENTS.md` — this entry.
+
+**Known remaining / notes:**
+- `_pawn_salt`'s tick_count term is what makes the wander draw change every tick; since this was already present, the ONLY behavioral gap this session closed is that pawns now reach the wander draw every idle tick instead of every 10th. No RNG-stream change, no seed change, no frame coupling — determinism preserved.
+- The `_discrete_decisions_evicted` counter (non-zero) in F10 diagnostics will signal the watchdog is firing; the cooldown-wander can be profiled via `_pd_stage` counters under `--profile-pawn-dispatch` if needed (not run this session per directive).
+- Open diagnostics from 2026-08-29 stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Frame-coupled `_process` movement remains the pre-existing 1x/2x determinism cross-cut (deferred).

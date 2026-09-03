@@ -61,12 +61,22 @@ var _open_by_settlement: Dictionary = {}  # settlement_id -> Array[int] (job IDs
 var _open_by_region: Dictionary = {}  # region_key -> Array[int] (job IDs)
 ## Center-region buckets: center_region -> Array[job_id]
 var _open_by_center_region: Dictionary = {}  # center_region -> Array[int] (job IDs)
-## Index generation for invariant checking
+## PHASE B: Index generation for invariant checking
 var _index_generation: int = 0
 ## Navigation generation for component cache invalidation
 var _nav_generation: int = 0
 ## Component cache: component_id -> Array[job_id] (jobs in this path component)
 var _open_by_component: Dictionary = {}  # component_id -> Array[int] (job IDs)
+
+## PHASE B: Claim telemetry tracking
+var _claim_attempts: int = 0
+var _claim_successes: int = 0
+var _claim_latency_total_us: int = 0
+var _claim_latency_samples: int = 0
+var _oldest_waiting_job_id: int = -1
+var _oldest_waiting_job_tick: int = 0
+var _consecutive_no_claim_streaks: Dictionary = {}  # pawn_id -> streak count
+var _rejection_reasons: Dictionary = {}  # reason_string -> count
 
 ## Lifetime counters (stats only).
 var posted_count: int = 0
@@ -385,6 +395,220 @@ func _verify_index_integrity() -> Dictionary:
 		unique_ids[job_id] = true
 	
 	return {"valid": valid, "errors": errors}
+
+
+## PHASE B: Indexed candidate snapshot for pawn decision
+## Returns a deterministic narrowed candidate set intersected by type, authority,
+## settlement/region, and path-component. Reused across all claim strategies.
+## Returns {candidates: Array[Job], snapshot_id: int, rejection_reasons: Dictionary}
+func get_indexed_candidate_snapshot(
+	pawn: Node,
+	pd: Variant,
+	allowed_types: Array = [],
+	allowed_categories: Array = [],
+	require_same_settlement: bool = false,
+	require_same_region: bool = false,
+	require_same_center: bool = false,
+	max_candidates: int = 1000
+) -> Dictionary:
+	if _open.is_empty() or pawn == null or pd == null:
+		return {"candidates": [], "snapshot_id": -1, "rejection_reasons": {"no_candidates": true}}
+	
+	var pawn_ctx: Dictionary = _build_pawn_visibility_context(pawn, pd)
+	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
+	var pawn_region_key: int = int(pawn_ctx.get("region_key", -1))
+	var pawn_center: int = int(pawn_ctx.get("center_region", -1))
+	var pawn_settlement_id: int = int(pawn_ctx.get("settlement_id", -1))
+	
+	# Start with type bucket intersection
+	var candidate_ids: Array[int] = []
+	if not allowed_types.is_empty():
+		for job_type in allowed_types:
+			if _open_by_type.has(job_type):
+				candidate_ids.append_array(_open_by_type[job_type])
+	else:
+		# No type filter, use all open jobs
+		for job in _open:
+			if job != null:
+				candidate_ids.append(job.id)
+	
+	if candidate_ids.is_empty():
+		return {"candidates": [], "snapshot_id": -1, "rejection_reasons": {"no_type_matches": true}}
+	
+	# Intersect with settlement/region/center filters
+	var filtered_ids: Array[int] = []
+	for job_id in candidate_ids:
+		var idx: int = _open_index_by_id.get(job_id, -1)
+		if idx < 0 or idx >= _open.size():
+			continue
+		var job: Job = _open[idx]
+		if job == null:
+			continue
+		
+		var ctx: Dictionary = _job_context_for(job)
+		var job_region: int = int(ctx.get("region_key", -1))
+		var job_center: int = int(ctx.get("center_region", -1))
+		var job_settlement: int = int(ctx.get("settlement_id", -1))
+		
+		if require_same_settlement and pawn_settlement_id >= 0 and job_settlement != pawn_settlement_id:
+			continue
+		if require_same_region and pawn_region_key >= 0 and job_region != pawn_region_key:
+			continue
+		if require_same_center and pawn_center >= 0 and job_center != pawn_center:
+			continue
+		
+		filtered_ids.append(job_id)
+	
+	if filtered_ids.is_empty():
+		return {"candidates": [], "snapshot_id": -1, "rejection_reasons": {"no_spatial_matches": true}}
+	
+	# Convert IDs to Job objects, sorted by stable ID for deterministic ordering
+	var candidates: Array[Job] = []
+	var job_lookup: Dictionary = {}
+	for job in _open:
+		if job != null:
+			job_lookup[job.id] = job
+	
+	filtered_ids.sort()  # Sort by job ID for deterministic order
+	for job_id in filtered_ids:
+		if job_lookup.has(job_id):
+			candidates.append(job_lookup[job_id])
+			if candidates.size() >= max_candidates:
+				break
+	
+	# Apply visibility filter (authority rules)
+	var visible_candidates: Array[Job] = []
+	for job in candidates:
+		if _job_visible_to_pawn_with_context(job, pawn, pd, pawn_ctx):
+			visible_candidates.append(job)
+	
+	if visible_candidates.is_empty():
+		return {"candidates": [], "snapshot_id": -1, "rejection_reasons": {"no_visible_candidates": true}}
+	
+	var snapshot_id: int = _index_generation
+	return {"candidates": visible_candidates, "snapshot_id": snapshot_id, "rejection_reasons": {}}
+
+
+## PHASE B: Claim from indexed candidate snapshot
+## Selects best job from pre-filtered snapshot using filter and priority callbacks
+## Returns {job: Job, rejection_reason: String}
+func claim_from_snapshot(
+	pawn: Node,
+	pd: Variant,
+	snapshot: Dictionary,
+	filter: Callable = Callable(),
+	priority_bonus: Callable = Callable()
+) -> Dictionary:
+	var candidates: Array = snapshot.get("candidates", [])
+	if candidates.is_empty():
+		return {"job": null, "rejection_reason": "empty_snapshot"}
+	
+	_claim_attempts += 1
+	var t0: int = Time.get_ticks_usec()
+	
+	var pawn_ctx: Dictionary = _build_pawn_visibility_context(pawn, pd)
+	var pawn_tile: Vector2i = pawn_ctx.get("tile", Vector2i(-1, -1))
+	var obedience_weight: float = 1.0
+	if WorldAI != null and WorldAI.has_method("get_pawn_obedience_weight"):
+		obedience_weight = WorldAI.get_pawn_obedience_weight(int(pd.id))
+	
+	var best_idx: int = -1
+	var best_eff: int = -0x7FFFFFFF
+	var best_dist: int = 0x7FFFFFFF
+	var use_filter: bool = filter.is_valid()
+	var use_bonus: bool = priority_bonus.is_valid()
+	var _type_bonus_cache: Dictionary = {}
+	
+	for i in range(candidates.size()):
+		var j: Job = candidates[i]
+		if j == null:
+			continue
+		
+		# Check if job is still open (may have been claimed by another pawn)
+		if not _open_index_by_id.has(j.id):
+			continue
+		
+		# Enforce filter if provided
+		if use_filter and not filter.call(j):
+			continue
+		
+		# Re-check visibility (snapshot may have stale visibility)
+		if not _job_visible_to_pawn_with_context(j, pawn, pd, pawn_ctx):
+			continue
+		
+		var jt: int = j.type
+		var bonus: int = 0
+		if use_bonus:
+			bonus = int(priority_bonus.call(j))
+		if not _type_bonus_cache.has(jt):
+			var _tb: int = 0
+			var job_cat: String = pd.call("job_category_for_type", jt) if pd.has_method("job_category_for_type") else ""
+			if not job_cat.is_empty():
+				if pd.likes is Dictionary and pd.likes.has(job_cat):
+					_tb += 5
+				if pd.dislikes is Dictionary and pd.dislikes.has(job_cat):
+					_tb -= 5
+			if pd.has_method("has_required_tool_for_job") and not pd.has_required_tool_for_job(jt):
+				_tb -= 10
+			_type_bonus_cache[jt] = _tb
+		bonus += int(_type_bonus_cache[jt])
+		
+		var adjusted_priority: int = j.priority
+		if obedience_weight < 0.5:
+			adjusted_priority = int(j.priority / maxf(obedience_weight, 0.01))
+		
+		var eff: int = adjusted_priority + bonus
+		var d: int = _chebyshev(pawn_tile, j.work_tile)
+		
+		# Deterministic tie-breaking: use job ID when scores are equal
+		if eff > best_eff or (eff == best_eff and (d < best_dist or (d == best_dist and j.id < candidates[best_idx].id if best_idx >= 0 else true))):
+			best_idx = i
+			best_eff = eff
+			best_dist = d
+	
+	if best_idx < 0:
+		# Track rejection
+		var pawn_id: int = int(pd.id) if pd != null and pd.has_method("get") else -1
+		if pawn_id >= 0:
+			_consecutive_no_claim_streaks[pawn_id] = int(_consecutive_no_claim_streaks.get(pawn_id, 0)) + 1
+		_rejection_reasons["no_eligible_candidates"] = int(_rejection_reasons.get("no_eligible_candidates", 0)) + 1
+		return {"job": null, "rejection_reason": "no_eligible_candidates"}
+	
+	var job: Job = candidates[best_idx]
+	
+	# Claim the job using O(1) index lookup
+	var open_idx: int = _open_index_by_id.get(job.id, -1)
+	if open_idx >= 0 and open_idx < _open.size() and _open[open_idx] == job:
+		_open.remove_at(open_idx)
+		_index_repair_after_swap(open_idx)
+		_index_remove_job(job)
+		_claimed.append(job)
+		job.state = Job.State.CLAIMED
+		job.assigned_pawn = pawn
+		_bump_jobs_data_generation()
+		job_claimed.emit(job, pawn)
+		
+		_claim_successes += 1
+		var elapsed_us: int = Time.get_ticks_usec() - t0
+		_claim_latency_total_us += elapsed_us
+		_claim_latency_samples += 1
+		
+		# Track oldest waiting job
+		var job_tick: int = int(job.posted_tick)
+		if job_tick > 0 and (job_tick < _oldest_waiting_job_tick or _oldest_waiting_job_tick == 0):
+			_oldest_waiting_job_tick = job_tick
+			_oldest_waiting_job_id = job.id
+		
+		# Reset streak for this pawn
+		var pawn_id: int = int(pd.id) if pd != null and pd.has_method("get") else -1
+		if pawn_id >= 0:
+			_consecutive_no_claim_streaks[pawn_id] = 0
+		
+		return {"job": job, "rejection_reason": ""}
+	else:
+		# Job was claimed by another pawn
+		_rejection_reasons["race_condition"] = int(_rejection_reasons.get("race_condition", 0)) + 1
+		return {"job": null, "rejection_reason": "race_condition"}
 
 
 func _cache_job_context(job: Job) -> void:
@@ -1515,7 +1739,38 @@ func stats() -> Dictionary:
 		"abandon_reasons": _abandon_reasons.duplicate(),
 		"index_generation": _index_generation,  # PHASE A: index diagnostic
 		"nav_generation": _nav_generation,  # PHASE A: navigation generation
+		# PHASE B: Claim telemetry
+		"claim_attempts": _claim_attempts,
+		"claim_successes": _claim_successes,
+		"claim_latency_avg_us": (_claim_latency_total_us / _claim_latency_samples) if _claim_latency_samples > 0 else 0,
+		"oldest_waiting_job_id": _oldest_waiting_job_id,
+		"oldest_waiting_job_tick": _oldest_waiting_job_tick,
+		"rejection_reasons": _rejection_reasons.duplicate(),
 	}
+
+
+## PHASE B: Get top N work-starved pawns (bounded read-only accessor)
+## Returns Array of {pawn_id: int, streak: int}
+func get_top_work_starved_pawns(max_pawns: int = 10) -> Array:
+	if _consecutive_no_claim_streaks.is_empty():
+		return []
+	
+	var pawn_streaks: Array = []
+	for pawn_id in _consecutive_no_claim_streaks.keys():
+		var streak: int = int(_consecutive_no_claim_streaks[pawn_id])
+		if streak >= 5:  # Only count significant streaks
+			pawn_streaks.append({"pawn_id": int(pawn_id), "streak": streak})
+	
+	# Sort by streak descending
+	pawn_streaks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("streak", 0)) > int(b.get("streak", 0))
+	)
+	
+	# Return top N
+	var result: Array = []
+	for i in range(mini(max_pawns, pawn_streaks.size())):
+		result.append(pawn_streaks[i])
+	return result
 
 
 func _max_open_jobs_allowed() -> int:

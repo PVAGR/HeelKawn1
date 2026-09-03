@@ -768,3 +768,39 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - `claim_next_for` remains O(N) per first scan of a decision (76 open jobs in the aged save); the priority_cb memo dedups across the 4 scans but the first scan still pays full cost. A per-decision eager precompute or per-job-id global memo could reduce further (play-behavior risk with stale cross-pawn values; deferred).
 - The speed-independent 6ms `SIM_SLICE_BUDGET_USEC` slice is why 200x==100x in cheap fresh worlds"; separate from the mature per-tick cost; not addressed this session (user chose idle-scan cost, not the slice).
 - Pre-existing 1x determinism frame-coupling (`data.tile_pos` delta-based `_process` write) remains; both TTL=8 and TTL=128 diverge identically under `--fixed-fps 60`; fixing the frame-coupled tile write is a future cross-cut.
+
+---
+
+### 2026-09-03 — Session: opencode/big-pickle (200x Mature-World Freeze: pawn_discrete Lane-Min Fragility Fix)
+
+**Time:** ~UTC
+
+**What was done:**
+
+1. **Root-caused the two-clock divergence (committed frozen at 637.5s) via static inspection of the authoritative lane machinery.** `SimulationClock.committed` = min over all registered authoritative lanes (SimulationClock.gd:178-189). `pawn_continuous` commits to `F = legacy_core applied` and only fails for invalid/dead pawns (none at freeze) → always advances, NOT the frozen lane. `pawn_discrete` commits to `min_applied` across ALL pawns' `_discrete_applied_through` (TickManager.gd:590-617, line 615: `if all_ok and min_applied < INF: commit`). **If ANY ONE pawn's discrete applied-through wedges permanently, the lane freezes at that pawn's cursor and `committed` freezes for all pawns.** The wedge happens when a queued due deadline is never consumed by `_tick_idle` (returns early via a survival gate or narrative lane before reaching the decision gate at HeelKawnian.gd:6284).
+
+2. **Established the pawn-stop cascade mechanism.** At 200x in a mature world, the freeze manifests as a gradual one-by-one shutdown of all pawns (day 41-44 freeze evidence from `diag_freeze_audit.gd`): `path_walked=0`, `moved=0→8→4→1→0`, `states_moved=0`, `deadline_change=0`, `jobs_open=32`, `IDLE=21, WORKING=2, SLEEPING=4`. The primary symptom is ALL pawns settling into a "no viable claim + wander always fails" fixed point (deterministic WorldRNG stateless RNG means each pawn's wander-chance produces the same pass/fail for stable body/context parameters). The committed freeze (day 21) is a downstream symptom of one stuck pawn blocking the lane-min.
+
+3. **Implemented the stuck-deadline watchdog (HK-TIME-P4-FIX3) — the smallest safe root fix for the lane-min fragility.** In `HeelKawnian._apply_authoritative_discrete_frontier`, after the existing applied-through advance rule, added: if `_discrete_due_deadlines` is non-empty and the oldest deadline is > `_DISCRETE_STUCK_DEADLINE_MAX_LAG` (0.5s world time = 10 compat ticks) behind the current frontier, force-consume it via `_consume_discrete_decision()` and reschedule `_next_decision_world_time = frontier_seconds`. This advances the pawn's `_discrete_applied_through` so it no longer blocks the lane-min, while the reschedule allows natural recovery when the obstacle clears. Threshold is generous (10 ticks) — never fires for healthy pawns (pipeline completes in 1-3 ticks), but unblocks the lane within 10 ticks of a permanent wedge. Purely tick-based, deterministic, no RNG, no frame coupling.
+
+4. **Added diagnostics counter.** New per-pawn `_discrete_decisions_evicted` counter (0 for healthy pawns, >0 signals a stuck pawn was freed). Exposed in `get_pawn_discrete_snapshot_for_diagnostics()`. Non-zero values in the F10 snapshot or profiler output will directly signal the watchdog is active.
+
+5. **Static validation: `diag_parse_check.gd` → all 7 targets OK** (CreatorDebugMenu, HeelKawnian, SettlementMemory, Main, ColonySimServices, f10 regression, save_fence). Zero parse errors, zero script errors.
+
+**Root-cause summary:** The `pawn_discrete` authoritative lane uses a min-commit rule (TickManager.gd:615) — one permanently stuck pawn freezes `committed` for all pawns. The watchdog breaks this lock by auto-evicting stale deadlines.
+
+**Files modified:**
+- `scripts/pawn/HeelKawnian.gd` — 4 additions: `_DISCRETE_STUCK_DEADLINE_MAX_LAG` constant (line 661-667), `_discrete_decisions_evicted` counter (line 684-687), watchdog logic in `_apply_authoritative_discrete_frontier` (line 4686-4699), `decisions_evicted` in diagnostics snapshot (line 4748). All additive; no existing lines modified.
+
+**What this fix does NOT address (known remaining items):**
+- The frame-coupled `_process` movement (`data.tile_pos` written by `_process` with `step = 24*delta*speed`, HeelKawnian.gd:4017/4056) — a determinism violation and the reason pawn visual positions diverge from tick-truth. Deferred per prior sessions (large cross-cut).
+- The mature-world "no viable claim + wander always fails" fixed point at 200x (WorldRNG stateless deterministic RNG means same wander-chance → same pass/fail forever for stable context). This is a behavioral/design issue, not a code bug — the watchdog ensures pawns remain non-blocking, but the fundamental "all options exhausted" fixed point persists.
+- Per-stage job-rejection counters (P3 from 2026-08-29).
+- Per-pawn starvation trace (P4 from 2026-08-29, component-split food reachability hypothesis).
+- Autosave stage-by-stage timing (P5 from 2026-08-29).
+
+**Playtest risks:**
+- The watchdog only fires when a deadline is >0.5s stale (10 compat ticks). Healthy pawns (pipeline completes in 1-3 ticks) are unaffected.
+- After eviction, the pawn gets a fresh deadline at the current frontier, so it can recover naturally.
+- Determinism is preserved: purely tick-based threshold, no RNG, no frame coupling.
+- The `_discrete_decisions_evicted` counter in F10 diagnostics will signal when the watchdog is active.

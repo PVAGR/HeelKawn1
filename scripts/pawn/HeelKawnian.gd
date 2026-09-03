@@ -658,6 +658,13 @@ var _next_decision_world_time: float = -1.0
 ## _apply_authoritative_discrete_frontier can never re-queue a value that was already
 ## consumed by a real pipeline start. Far larger than any reachable frontier.
 const _DISCRETE_DEADLINE_NONE: float = 1e18
+## HK-TIME-P4-FIX3: a queued due deadline that has been waiting longer than this
+## threshold (in world-time seconds) past the current frontier is force-evicted
+## by the stuck-deadline watchdog.  The normal pipeline completes in 1-3 compat
+## ticks (0.05-0.15s of world time); this is 10 ticks — generous enough to never
+## fire for healthy pawns, tight enough to unblock the pawn_discrete authoritative
+## lane within ~10 compat ticks of a pawn permanently wedging.
+const _DISCRETE_STUCK_DEADLINE_MAX_LAG: float = 0.5
 ## HK-TIME-P4-FIX: ORDERED queued (discovered but NOT yet applied) due decision
 ## deadlines <= the latest frontier, ascending. A queued deadline is NOT an applied
 ## decision — _tick_idle may consume the OLDEST entry ONLY when it actually starts a
@@ -674,6 +681,10 @@ var _discrete_applied_through: float = -1.0
 ## Diagnostics: decisions queued, decisions actually consumed (real pipeline starts).
 var _discrete_decisions_computed: int = 0
 var _discrete_decisions_consumed: int = 0
+## HK-TIME-P4-FIX3: count of due deadlines force-evicted by the stuck-deadline
+## watchdog.  A non-zero value signals that a pawn's idle-decision path was
+## permanently wedged and the lane had to free it.
+var _discrete_decisions_evicted: int = 0
 ## Diagnostics: last frontier this pawn was driven through.
 var _discrete_decision_last_frontier: float = -1.0
 var _job_claim_cooldowns: Dictionary = {}  # job_id -> tick when cooldown expires (prevents re-claim loops)
@@ -4672,6 +4683,20 @@ func _apply_authoritative_discrete_frontier(frontier_seconds: float) -> bool:
 	#   - a queued due deadline remains     -> stays at/before the oldest unconsumed one.
 	if _discrete_due_deadlines.is_empty():
 		_discrete_applied_through = maxf(_discrete_applied_through, frontier_seconds)
+	# HK-TIME-P4-FIX3: Stuck-deadline watchdog.  If a queued due deadline has been
+	# waiting longer than _DISCRETE_STUCK_DEADLINE_MAX_LAG past the current frontier
+	# (default: 10 compat ticks / 0.5s of world time), the pawn's _tick_idle is
+	# permanently wedged (e.g. a survival gate returning early every tick).  Force-
+	# consume the stale deadline so this pawn's _discrete_applied_through advances
+	# and the pawn_discrete authoritative lane is not permanently blocked for ALL
+	# pawns by one stuck pawn.  Reschedule a fresh deadline at the current frontier
+	# so the pawn recovers naturally when the obstacle clears.
+	if not _discrete_due_deadlines.is_empty():
+		var oldest_deadline: float = _discrete_due_deadlines[0]
+		if frontier_seconds - oldest_deadline > _DISCRETE_STUCK_DEADLINE_MAX_LAG:
+			_consume_discrete_decision()
+			_discrete_decisions_evicted += 1
+			_next_decision_world_time = frontier_seconds
 	_discrete_decision_last_frontier = frontier_seconds
 	return true
 
@@ -4720,6 +4745,7 @@ func get_pawn_discrete_snapshot_for_diagnostics() -> Dictionary:
 		"pending_normal_count": pending_normal,
 		"decisions_computed": _discrete_decisions_computed,
 		"decisions_consumed": _discrete_decisions_consumed,
+		"decisions_evicted": _discrete_decisions_evicted,
 		"last_frontier": _discrete_decision_last_frontier,
 	}
 

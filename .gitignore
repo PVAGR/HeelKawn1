@@ -1,4 +1,12 @@
-```
+# Godot editor cache (regenerated on import)
+.godot/
+
+# Agent tooling (local, never commit)
+.agentscope-heelkawn/
+.letta/
+temp_test/
+.aider*
+
 # Compiled and build artifacts
 *.pyc
 __pycache__/
@@ -71,5 +79,3 @@ htmlcov/
 *.tar.bz2
 *.tar.xz
 *.tar.zst
-```
-.aider*

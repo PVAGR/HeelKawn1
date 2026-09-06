@@ -12,21 +12,21 @@
 
 ## AI AGENT CROSS-REFERENCE
 
-This file is **step 4** of the handoff read order (enforced by `.cursor/rules/heelkawn-handoff.mdc`):
+This file is **step 5** of the handoff read order (enforced by `rules/heelkawn-handoff.mdc`):
 
-1. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers
-2. `HEELKAWN.txt` — Quick-context orientation
-3. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
-4. **`docs/BUILD_INVENTORY.md`** — THIS FILE. Honest built-vs-missing inventory
-5. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
-6. `docs/HEELKAWN_BLUEPRINT.md` — PSUni blueprint
+1. `AGENTS.md` — Operating manual, kernel rules, progress log
+2. `docs/PHASE_TRACKER.md` — 0.1 → 1.0 phase plan and current position
+3. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers
+4. `HEELKAWN.txt` — Quick-context orientation
+5. **`docs/BUILD_INVENTORY.md`** — THIS FILE. Honest built-vs-missing inventory
+6. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
 
 **Truth hierarchy (when docs conflict):**
 1. ✅ Source code and Godot runtime checks (highest truth)
-2. 📋 `docs/BUILD_INVENTORY.md` — THIS FILE. Built-vs-missing inventory
-3. 📝 `docs/HEELKAWN_STATE.md` — Current working state
-4. 🧭 `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
-5. 📜 `AI_README.md` — Kernel philosophy (non-negotiable)
+2. 📋 `AGENTS.md` — Kernel philosophy and operational rules
+3. 🗺 `docs/PHASE_TRACKER.md` — Phase plan and current position
+4. 📝 `docs/HEELKAWN_STATE.md` — Current working state
+5. 🧭 `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
 6. 🗂 Archive docs / AI session notes — Historical evidence, not authority
 
 **See also:**

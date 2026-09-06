@@ -19,10 +19,10 @@ HeelKawn is a memory and consequence simulator where history is written by actio
 
 ## Read Order (AI Agents)
 
-1. `AI_README.md` -- core philosophy, kernel rules, forbidden patterns
-2. `docs/AI_RUNTIME_MANDATE.md` -- non-negotiable runtime rules
-3. `docs/HEELKAWN_STATE.md` -- authoritative current status
-4. Latest `docs/STATE_VERIFICATION_YYYY-MM-DD.md`
+1. `AGENTS.md` -- operating manual, kernel rules, progress log (single source of truth)
+2. `docs/HEELKAWN_STATE.md` -- authoritative current status
+3. `docs/PHASE_TRACKER.md` -- 0.1 → 1.0 phase plan and current position
+4. `docs/lore/` -- game canon
 
 ## Quality Gate
 

@@ -11,25 +11,24 @@ The current priority is not to add more disconnected systems. The current priori
 
 ## AI AGENT CROSS-REFERENCE
 
-This file is **step 5** in the handoff read order (enforced by `.cursor/rules/heelkawn-handoff.mdc`):
+This file is **step 5** in the handoff read order (enforced by `rules/heelkawn-handoff.mdc`):
 
-1. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers, action plan
-2. `HEELKAWN.txt` — Quick-context orientation
-3. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
+1. `AGENTS.md` — Operating manual, kernel rules, progress log (single source of truth)
+2. `docs/PHASE_TRACKER.md` — 0.1 → 1.0 phase plan and current position
+3. `docs/HEELKAWN_STATE.md` — Authoritative current status, blockers, action plan
 4. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
 5. **`docs/HEELKAWN_PROJECT_COMPASS.md`** — THIS FILE. Orientation compass and north star
-6. `docs/HEELKAWN_BLUEPRINT.md` — Full PSUni blueprint
 
 **Truth hierarchy (when docs conflict):**
 
 | Priority | Source | Purpose |
 |----------|--------|---------|
 | 1 (Highest) | Source code + Godot runtime | What is actually real |
-| 2 | `docs/BUILD_INVENTORY.md` | Honest built-vs-missing inventory |
-| 3 | `docs/HEELKAWN_STATE.md` | Current working state & next steps |
-| 4 | **`docs/HEELKAWN_PROJECT_COMPASS.md`** | THIS FILE — compass |
-| 5 | `AI_README.md` | Kernel philosophy (non-negotiable principles) |
-| 6 | `docs/HEELKAWNIAN_EVOLUTION_SYSTEM.md` | Long-range evolution vision |
+| 2 | `AGENTS.md` | Operating manual, kernel rules, progress log |
+| 3 | `docs/PHASE_TRACKER.md` | Phase plan and current position |
+| 4 | `docs/BUILD_INVENTORY.md` | Honest built-vs-missing inventory |
+| 5 | `docs/HEELKAWN_STATE.md` | Current working state & next steps |
+| 6 | **`docs/HEELKAWN_PROJECT_COMPASS.md`** | THIS FILE — compass |
 | 7 (Lowest) | Archive docs / AI session notes | Historical evidence |
 
 When docs conflict, preserve the dream but trust the running code.

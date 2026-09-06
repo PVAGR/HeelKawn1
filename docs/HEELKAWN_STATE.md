@@ -4,13 +4,13 @@
 We are always building, always refining, always expanding. This document captures the
 **CURRENT STATE** of an ongoing creative journey.
 
-**Last Updated:** August 19, 2026
-**Latest Checkpoint:** August 19, 2026 (performance stabilization + AI activity fixes)
-**Current Phase:** Performance Stabilization Verified (pending smoke test run)
-**Overall Status:** Deterministic tick system unified; Matrix AI cached; pawn job pipeline fixed; automated smoke test added.
+**Last Updated:** September 06, 2026
+**Latest Checkpoint:** September 06, 2026 (doc cleanup + phase tracking; see AGENTS.md progress log)
+**Current Phase:** Version 0.1 pre-1.0 — see [PHASE_TRACKER.md](PHASE_TRACKER.md)
+**Overall Status:** Deterministic kernel stable; multi-rate scheduling live; high-speed liveness verified; documentation consolidated into AGENTS.md.
 
-**Read first:** [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [HEELKAWN_BLUEPRINT.md](HEELKAWN_BLUEPRINT.md) and [HEELKAWN_STATE.md](HEELKAWN_STATE.md) (this file)
-**Latest verification snapshot:** [STATE_VERIFICATION_2026-08-17.md](STATE_VERIFICATION_2026-08-17.md)
+**Read first:** [AGENTS.md](../AGENTS.md) (operating manual, kernel rules, progress log), then [HEELKAWN_PROJECT_COMPASS.md](HEELKAWN_PROJECT_COMPASS.md) and [PHASE_TRACKER.md](PHASE_TRACKER.md)
+**Phase plan & position:** [PHASE_TRACKER.md](PHASE_TRACKER.md)
 
 ---
 
@@ -141,27 +141,26 @@ Performance Stabilization Verified (pending smoke test run)
 
 ## AI AGENT CROSS-REFERENCE
 
-**Read order for AI agents (handoff sequence):**
-1. `AI_README.md` — Core philosophy, kernel rules, forbidden patterns
-2. `HEELKAWN.txt` — Quick-context orientation
+**Read order for AI agents (handoff sequence, enforced by `rules/heelkawn-handoff.mdc`):**
+1. `AGENTS.md` — Operating manual, kernel rules, architecture, progress log (single source of truth)
+2. `docs/PHASE_TRACKER.md` — 0.1 → 1.0 phase plan and current position
 3. **`docs/HEELKAWN_STATE.md`** — THIS FILE. Authoritative current status
-4. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
-5. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
-6. `docs/HEELKAWN_BLUEPRINT.md` — Full PSUni blueprint
+4. `HEELKAWN.txt` — Quick-context orientation
+5. `docs/BUILD_INVENTORY.md` — Honest built-vs-missing inventory
+6. `docs/HEELKAWN_PROJECT_COMPASS.md` — Orientation compass
 
 **Related docs (always refer to for canon/system context):**
 - `docs/WORLD_BIBLE/CANON_SYSTEMS_FEATURE_QUEUE.md` — Canon execution queue
 - `docs/WORLD_BIBLE/MASTER_INDEX.md` — World bible master index
 - `docs/WORLD_BIBLE/GLOSSARY.md` — Canon glossary with implementation anchors
-- `.cursor/rules/heelkawn-canonical-repo.mdc` — Canonical repo policy
-- `.cursor/rules/heelkawn-handoff.mdc` — Handoff read order (enforced by cursor rules)
+- `docs/lore/` — Game canon (universe constitution, metaphysics, factions, map)
 
 **Truth hierarchy (when docs conflict):**
 1. Source code and Godot runtime checks (highest truth)
-2. `docs/BUILD_INVENTORY.md` — Built-vs-missing inventory
-3. `docs/HEELKAWN_STATE.md` — This file (current working state)
-4. `docs/HEELKAWN_PROJECT_COMPASS.md` — Project compass
-5. `AI_README.md` — Kernel philosophy (non-negotiable)
+2. `AGENTS.md` — Kernel philosophy and operational rules (this file was consolidated 2026-08-18 to replace 7+ scattered AI instruction files)
+3. `docs/PHASE_TRACKER.md` — Phase plan and position
+4. `docs/HEELKAWN_STATE.md` — This file (current working state)
+5. `docs/BUILD_INVENTORY.md` — Built-vs-missing inventory
 6. Historical docs / AI session notes — Evidence, not authority
 
 ---
@@ -718,8 +717,7 @@ Performance Stabilization Verified (pending smoke test run)
   - Players can now export chronicle history to file via F10 debug menu
 
 - **DOCS: Updated tracking files**:
-  - Updated TASKS.md, TODO.md, brain/memory/active_context.md, brain/memory/knowledge/tasks.md
-  - Created brain/memory/sessions/2026-05-22.md session log
+  - Updated the pre-consolidation task files (TASKS.md, TODO.md, brain/memory — since removed; tracking now lives in AGENTS.md progress log and docs/PHASE_TRACKER.md)
 
 - **CLEANUP: Repository hygiene**:
   - Removed accidental `$null` file from root directory

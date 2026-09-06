@@ -17,6 +17,6 @@ Last updated: 2026-08-18
 
 ## AI Behavior
 
-1. Read `AI_README.md` before editing core simulation code.
+1. Read `AGENTS.md` before editing core simulation code.
 2. Preserve deterministic kernel contract.
 3. Performance fixes are always allowed and encouraged.

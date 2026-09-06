@@ -1112,3 +1112,39 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - World-time cadence verification is the user's 200x live step: settlements/construction/rebirth now fire at the same per-world-time rate as 1x (CPU permitting); F10 Effective World Speed is the honest throughput readout.
 - Pre-existing open diagnostics stand (from 2026-08-29): P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Neural sig-flap at 200x revisited only if playtest still stalls (resolves now 5-11× cheaper).
 - The doc-cleanup commit (09-06, ~247 files) remains a separate pending commit, untouched by this chunk.
+
+---
+
+### 2026-09-06 — Session: opencode/big-pickle (Construction Seeder Single-Pass Fix + F10 Full-Snapshot-to-Log)
+
+**Time:** ~UTC
+
+**What was done:**
+
+1. **Committed + pushed the prior session's root-caused analysis work** (see commits `dd1d9b41` + `aa5dd730`): parse-fixed `graphical_speed_pause_test.gd`, and the **construction-seeder hotspot fix** — `_seed_construction_jobs` (`scenes/main/Main.gd:7443-7447`) ran **19 separate full-union scans** (`count_pending_jobs_near`) per settlement; the single-pass helper `count_pending_by_types_near` (`JobManager.gd:1660`) already existed unused. The 19-loop was replaced with one single-pass call + legacy fallback; all consumers use `.get(type, 0)`, behavior-neutral. This matched the repeating `[CONSTRUCTION_SEED] ~10ms (budget=2000us)` in the playtest log and the post-day-20 slowdown complaint.
+
+2. **Diagnostic evidence collected (fresh world, 200x, fenced):** `diag_pawn_profile.gd` tick 300 → `dispatch/IDLE avg=3305us max=15885us`, dominated by `idle/resume_pipeline avg=2634us` + `idle/util_build_context avg=1810us` (neural forward already cut ~5x by the 2026-09-06 chunk-1 matrix cache). `diag_highspeed_pawns.gd` `RESULT=FAIL` on `TICK_DELTA_MONOTONIC_INCREASING` was **proven pre-existing** by stash-and-rerun (baseline 232/270/270 vs 231/270/243) — the documented CPU-envelope ceiling, not a regression.
+
+3. **F10: full snapshot to game log (the requested change).** `scripts/ui/CreatorDebugMenu.gd`:
+   - **COPY AI WORLD SNAPSHOT** now ALSO `print()`s the complete curated 16-block snapshot (`_snapshot_text`) to the Godot log (still writes clipboard + `user://heelkawn_world_snapshot.txt`), wrapped in `===== FULL AI WORLD SNAPSHOT @tick N =====` banners — the entire state bundle an AI needs is now in one log block.
+   - **New button "PRINT FULL SNAPSHOT TO LOG"** (`_on_ai_print_snapshot_log`) — one press dumps the whole curated bundle to the log at press time.
+   - **New button "AUTO-PRINT SNAPSHOT: OFF/ON"** (`_on_ai_auto_print_toggle` + `_process` hook) — when on, prints the full snapshot to the log every `_auto_print_interval_secs` (60s real time), so the log **dynamically evolves over time** with the simulation (tick/day/pressures/events/anomalies all refresh per emission). Runs from `_process` regardless of panel visibility.
+   - All new output stays under the `MAX_SNAPSHOT_LINES=300` cap (no `[output overflow]` regression).
+
+4. **Regression extended** (`tools/f10_live_data_regression.gd`): the real-dispatcher button loop now also drives `_on_ai_print_snapshot_log` + `_on_ai_auto_print_toggle`.
+
+**Verification (fenced `--playtest-no-save`, production autosave untouched):**
+- `diag_parse_check.gd` → all 8 targets OK (incl. CreatorDebugMenu, Main, HeelKawnian, f10 regression).
+- `f10_live_data_regression.gd` → **full pass**: both new buttons ran via real dispatcher without error; `_on_copy_ai_snapshot (via button) 29 ms`; snapshot file 69665 bytes / 16 block headers / Zoom / 0-0 settlements / job-food truth / selected tile (15,11); consistency contract `pop=24 jobs=10 formal=0 edible=0`; spatial centers PASS; selection/deselection PASS; F10_READ_ONLY PASS (tick=20 unchanged); JSON 19/19 keys. The complete snapshot is now visibly in the captured log between `===== FULL AI WORLD SNAPSHOT =====` banners.
+- Production autosave SHA-256 `2B184F3A4E44B65A7AB783EA41F09D71F894EC453B5B1E348F76A93560A82FF3` verified unchanged after all runs.
+- Commit `23f9cec3` pushed (`aa5dd730..23f9cec3 main -> main`); working tree clean except gitignored `.godot/` cache churn.
+
+**Files modified:**
+- `scripts/ui/CreatorDebugMenu.gd` — copy-to-log, `_on_ai_print_snapshot_log`, `_on_ai_auto_print_toggle`, `_process` auto-print hook, `_auto_print_*` vars, two new AI buttons.
+- `tools/f10_live_data_regression.gd` — two new dispatcher-driven button checks.
+- `AGENTS.md` — this entry.
+
+**Known remaining / notes:**
+- Next perf lever (user's earlier choice): profile the user's REAL saved colony past day 20 at 200x — now that F10 dumps the full bundle to the log (and AUTO-PRINT streams it), the user just plays with AUTO-PRINT on and shares the log; the bundled ENGINE/Anomalies sections show Effective World Speed + any starvation/claim anomalies for attribution. Claim-path memoization (chunk 2 2026-09-06) is in place but needs mature-scale verification.
+- Pre-existing open diagnostics stand: P3 per-stage job-rejection counters; P4 per-pawn starvation trace (component-split food reachability); P5 autosave stage timing. Frame-coupled `_process` movement remains the deferred determinism/visual cross-cut.
+- The doc-cleanup commit (09-06, ~247 files) remains a separate pending commit, untouched by this session.

@@ -52,6 +52,8 @@ Behavior-neutral hot-path optimization of `PawnNeuralNetwork.forward_propagate`:
 
 ## CHUNK 1 (commit) — Behavior-neutral PawnNeuralNetwork forward hot-path optimization
 
+**Commit:** `fe16bdb6` — pushed to origin/main (`8cb89ae3..fe16bdb6`). 5 files, +362/−36.
+
 ### What changed
 `scripts/pawn/PawnNeuralNetwork.gd`:
 - `forward_propagate` no longer builds a String conn_id + `Dictionary.get` for every (source×target) pair (~6000 String allocs/pass → measured ~20ms).

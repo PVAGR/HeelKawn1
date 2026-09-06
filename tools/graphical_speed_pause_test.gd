@@ -13,7 +13,7 @@ var _frame := 0
 var _printed := false
 var _gm: Node = null
 var _main: Node = null
-var _hk: GDScript = null
+var _hk: Node = null
 var _tp: Node = null
 
 # Per-window measurements
@@ -21,6 +21,7 @@ var _w1: Dictionary = {}  # 1x
 var _w2: Dictionary = {}  # 200x
 var _w3: Dictionary = {}  # 1x return
 var _w4: Dictionary = {}  # pause
+var _pause_start_tick: int = -1
 
 func _init_window_data() -> Dictionary:
 	return {
@@ -56,7 +57,7 @@ func _spawn_main() -> void:
 		return
 	var main: Node = packed.instantiate()
 	root.add_child(main)
-	_hk = main.get_node_or_null("PawnSpawner") as GDScript
+	_hk = main.get_node_or_null("PawnSpawner")
 	_main = main
 	_tp = root.get_node_or_null("/root/TickManager")
 	_gm = root.get_node_or_null("/root/GameManager")
@@ -126,7 +127,7 @@ func _process(_delta: float) -> bool:
 		# Pause the game
 		if _gm != null and _gm.has_method("pause"):
 			_gm.call("pause")
-		_pause_start_tick: int = int(_tp.get("current_tick"))
+		_pause_start_tick = int(_tp.get("current_tick"))
 		_phase = "pause_measure"
 		print("SPEED_PAUSE_TEST: pause phase started")
 		return false
@@ -148,7 +149,6 @@ func _process(_delta: float) -> bool:
 	return false
 
 func _enter_1x_measure(tick: int) -> void:
-	_current_window = "1x"
 	_w1 = _init_window_data()
 	_w1["start_tick"] = tick
 	_w1["start_wall_usec"] = Time.get_ticks_usec()
@@ -184,7 +184,7 @@ func _accumulate(w: Dictionary, tick: int) -> void:
 			if child != null:
 				var name: String = child.name
 				if name != null:
-					if name.startswith("EvtParticle") or name.startswith("_footstep_particles") or name.startswith("bubble") or name.startswith("Notification"):
+					if name.begins_with("EvtParticle") or name.begins_with("_footstep_particles") or name.begins_with("bubble") or name.begins_with("Notification"):
 						transient_nodes += 1
 		w["transient_count"] = transient_nodes
 		# Count working pawns
@@ -200,7 +200,7 @@ func _accumulate(w: Dictionary, tick: int) -> void:
 		var fps_samples: Array = w["engine_fps_samples"]
 		var avg_fps: float = 0.0
 		if fps_samples.size() > 0:
-			avg_fps = fps_samples.average()
+			avg_fps = _calc_avg_fps(fps_samples)
 		print("SPEED_PAUSE_TEST: %s tick=%d frame_count=%d avg_fps=%.1f pawns=%d transients=%d working=%s" % [
 			_phase, tick, w["frame_count"], avg_fps, w["pawn_count"], w["transient_count"], str(w["pawn_working"])
 		])
@@ -212,7 +212,7 @@ func _exit_1x_measure(tick: int) -> void:
 	var avg_fps: float = 0.0
 	var fps_samples: Array = _w1["engine_fps_samples"]
 	if fps_samples.size() > 0:
-		avg_fps = fps_samples.average()
+		avg_fps = _calc_avg_fps(fps_samples)
 	print("SPEED_PAUSE_TEST: 1x MEASUREMENT WINDOW end (elapsed_wall=%.2fs frames=%d avg_fps=%.1f)" % [wall_sec, _w1["frame_count"], avg_fps])
 
 func _exit_200x_measure(tick: int) -> void:
@@ -222,7 +222,7 @@ func _exit_200x_measure(tick: int) -> void:
 	var avg_fps: float = 0.0
 	var fps_samples: Array = _w2["engine_fps_samples"]
 	if fps_samples.size() > 0:
-		avg_fps = fps_samples.average()
+		avg_fps = _calc_avg_fps(fps_samples)
 	print("SPEED_PAUSE_TEST: 200x MEASUREMENT WINDOW end (elapsed_wall=%.2fs frames=%d avg_fps=%.1f)" % [wall_sec, _w2["frame_count"], avg_fps])
 
 func _accumulate_pause(w: Dictionary, tick: int) -> void:
@@ -240,17 +240,17 @@ func _accumulate_pause(w: Dictionary, tick: int) -> void:
 			if child != null:
 				var name: String = child.name
 				if name != null:
-					if name.startswith("EvtParticle") or name.startswith("_footstep_particles") or name.startswith("bubble") or name.startswith("Notification"):
+					if name.begins_with("EvtParticle") or name.begins_with("_footstep_particles") or name.begins_with("bubble") or name.begins_with("Notification"):
 						transient_nodes += 1
 		w["transient_count"] = transient_nodes
 	if tick % 30 == 0:
 		var fps_samples: Array = w["engine_fps_samples"]
 		var avg_fps: float = 0.0
 		if fps_samples.size() > 0:
-			avg_fps = fps_samples.average()
-	print("SPEED_PAUSE_TEST: pause tick=%d frame_count=%d avg_fps=%.1f transients=%d pawns=%d" % [
-		tick, w["frame_count"], avg_fps, w["transient_count"], w["pawn_count"]
-	])
+			avg_fps = _calc_avg_fps(fps_samples)
+		print("SPEED_PAUSE_TEST: pause tick=%d frame_count=%d avg_fps=%.1f transients=%d pawns=%d" % [
+			tick, w["frame_count"], avg_fps, w["transient_count"], w["pawn_count"]
+		])
 
 func _exit_1x_return_measure(tick: int) -> void:
 	_w3["end_tick"] = tick
@@ -259,7 +259,7 @@ func _exit_1x_return_measure(tick: int) -> void:
 	var avg_fps: float = 0.0
 	var fps_samples: Array = _w3["engine_fps_samples"]
 	if fps_samples.size() > 0:
-		avg_fps = fps_samples.average()
+		avg_fps = _calc_avg_fps(fps_samples)
 	print("SPEED_PAUSE_TEST: 1x RETURN MEASUREMENT WINDOW end (elapsed_wall=%.2fs frames=%d avg_fps=%.1f)" % [wall_sec, _w3["frame_count"], avg_fps])
 
 func _exit_pause_measure(tick: int) -> void:
@@ -269,8 +269,8 @@ func _exit_pause_measure(tick: int) -> void:
 	var avg_fps: float = 0.0
 	var fps_samples: Array = _w4["engine_fps_samples"]
 	if fps_samples.size() > 0:
-		avg_fps = fps_samples.average()
-	print("SPEED_PAUSE_TEST: PAUSE MEASUREMENT WINDOW end (elapsed_wall=%.2fs frames=%d avg_fps=%.1f)" % [wall_sec, _w4["frame_count"], avg_fps)]
+		avg_fps = _calc_avg_fps(fps_samples)
+	print("SPEED_PAUSE_TEST: PAUSE MEASUREMENT WINDOW end (elapsed_wall=%.2fs frames=%d avg_fps=%.1f)" % [wall_sec, _w4["frame_count"], avg_fps])
 
 func _finish() -> void:
 	print("===== SPEED_PAUSE_TEST RESULT =====")
@@ -289,10 +289,10 @@ func _finish() -> void:
 	# Check key success criteria
 	var ok: bool = true
 	# 1x must have reasonable FPS
-	var w1_avg: float = _w1["engine_fps_samples"].average()
+	var w1_avg: float = _calc_avg_fps(_w1["engine_fps_samples"])
 	if w1_avg < 10.0: ok = false
 	# 200x must have reasonable FPS (may be lower but not collapse)
-	var w2_avg: float = _w2["engine_fps_samples"].average()
+	var w2_avg: float = _calc_avg_fps(_w2["engine_fps_samples"])
 	if w2_avg < 5.0: ok = false
 	# Pause must restore FPS (pause phase avg should be measured)
 	print("RESULT: ok=%s" % str(ok))
@@ -300,4 +300,7 @@ func _finish() -> void:
 
 func _calc_avg_fps(samples: Array) -> float:
 	if samples.size() == 0: return 0.0
-	return samples.average()
+	var total: float = 0.0
+	for s in samples:
+		total += float(s)
+	return total / float(samples.size())

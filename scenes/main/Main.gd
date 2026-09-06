@@ -7438,14 +7438,27 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		var markets: int = int(features.get("market", 0))
 		var barracks: int = int(features.get("barracks", 0))
 		var cellars: int = int(features.get("cellar", 0))
-		# Count pending jobs for all relevant building types
+		# Count pending jobs for all relevant building types in ONE union pass
+		# (count_pending_by_types_near) instead of 19 separate full-union scans
+		# (count_pending_jobs_near). Same counts, ~19x fewer per-union passes over
+		# the active-job set — the dominant cost in the construction seeder at
+		# high speed.
 		var pending_by_type: Dictionary = {}
-		if JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+		if JobManager != null and JobManager.has_method("count_pending_by_types_near"):
+			pending_by_type = JobManager.count_pending_by_types_near(center_tile, [
+				Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT,
+				Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT,
+				Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET,
+				Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER,
+				Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD,
+				Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL,
+				Job.Type.MAINTAIN_STRUCTURE,
+			], 12)
+		elif JobManager != null and JobManager.has_method("count_pending_jobs_near"):
+			# Fallback: legacy per-type scans (only if the single-pass helper is absent)
 			for jt in [Job.Type.BUILD_BED, Job.Type.BUILD_WALL, Job.Type.BUILD_DOOR, Job.Type.BUILD_FIRE_PIT, Job.Type.BUILD_STORAGE_HUT, Job.Type.BUILD_GRANARY, Job.Type.BUILD_FARM_WHEAT, Job.Type.BUILD_WORKSHOP, Job.Type.BUILD_APOTHECARY, Job.Type.BUILD_MARKET, Job.Type.BUILD_LIBRARY, Job.Type.BUILD_BARRACKS, Job.Type.BUILD_WATCHTOWER, Job.Type.BUILD_SCHOOL, Job.Type.BUILD_TRADING_POST, Job.Type.BUILD_ROAD, Job.Type.BUILD_CELLAR, Job.Type.TRADE_HAUL, Job.Type.TEACH_SKILL, Job.Type.MAINTAIN_STRUCTURE]:
 				pending_by_type[jt] = JobManager.count_pending_jobs_near(center_tile, jt, 12)
-				if Time.get_ticks_usec() - start_usec >= budget_usec:
-						break
-		# BUDGET CHECK: After pending count loop, before job posting
+		# BUDGET CHECK: After pending count pass, before job posting
 		if Time.get_ticks_usec() - start_usec >= budget_usec:
 			break
 		# Ensure settlement has a stockpile zone — pawns need a local drop point

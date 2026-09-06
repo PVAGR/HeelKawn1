@@ -24,6 +24,10 @@ var _sleeping_pawns_label: Label
 var _recent_events_label: Label
 var _report_status_label: Label
 var _snapshot_status_label: Label = null
+var _auto_print_button: Button = null
+var _auto_print_enabled: bool = false
+var _auto_print_interval_secs: float = 60.0
+var _auto_print_last_ms: int = 0
 var _hover_tile: Vector2i = Vector2i(-1, -1)
 var _designation_mode: String = ""
 
@@ -249,6 +253,8 @@ func _build_ai_diagnostic_area() -> void:
 	var ai_reports := [
 		["COPY AI WORLD SNAPSHOT", "_on_copy_ai_snapshot"],
 		["GENERATE AI DEBUG BUNDLE", "_on_generate_ai_bundle"],
+		["PRINT FULL SNAPSHOT TO LOG", "_on_ai_print_snapshot_log"],
+		["AUTO-PRINT SNAPSHOT: OFF", "_on_ai_auto_print_toggle"],
 		["OVERVIEW", "_on_ai_overview"],
 		["PAWNS", "_on_ai_pawns"],
 		["WORK", "_on_ai_work"],
@@ -266,6 +272,8 @@ func _build_ai_diagnostic_area() -> void:
 		btn.add_theme_font_size_override("font_size", 12)
 		btn.pressed.connect(_on_ai_button_pressed.bind(str(r[1])))
 		grid.add_child(btn)
+		if str(r[0]).begins_with("AUTO-PRINT"):
+			_auto_print_button = btn
 	
 	_snapshot_status_label = Label.new()
 	_snapshot_status_label.text = "last snapshot: none"
@@ -274,6 +282,14 @@ func _build_ai_diagnostic_area() -> void:
 	_vbox.add_child(_snapshot_status_label)
 
 func _process(delta: float) -> void:
+	if _auto_print_enabled:
+		var now_ms := Time.get_ticks_msec()
+		if now_ms - _auto_print_last_ms >= int(_auto_print_interval_secs * 1000.0):
+			_auto_print_last_ms = now_ms
+			var snapshot_dict := _build_ai_snapshot_dict()
+			print("\n===== AUTO-PRINT AI WORLD SNAPSHOT @tick %d (every %.1fs real time) =====" % [_get_or("GameManager", "tick_count"), _auto_print_interval_secs])
+			print(_snapshot_text(snapshot_dict))
+			print("===== END AUTO-PRINT SNAPSHOT =====")
 	if not visible:
 		return
 		
@@ -442,7 +458,10 @@ func _on_copy_ai_snapshot() -> void:
 	if file != null:
 		file.store_string(snapshot_text)
 		file.close()
-	_snapshot_status_label.text = "Copied snapshot to clipboard and file"
+	print("\n===== FULL AI WORLD SNAPSHOT @tick %d (also written to user://heelkawn_world_snapshot.txt) =====" % _get_or("GameManager", "tick_count"))
+	print(snapshot_text)
+	print("===== END FULL AI WORLD SNAPSHOT =====")
+	_snapshot_status_label.text = "Copied snapshot to clipboard/file and printed to log"
 	call_deferred("_clear_status_label", 2.0)
 
 func _on_generate_ai_bundle() -> void:
@@ -533,6 +552,24 @@ func _on_ai_anomalies() -> void:
 	var anomalies_text = _format_anomalies(anomalies)
 	print(anomalies_text)
 	_snapshot_status_label.text = "Anomalies printed to log"
+	call_deferred("_clear_status_label", 1.5)
+
+func _on_ai_print_snapshot_log() -> void:
+	var snapshot_dict = _build_ai_snapshot_dict()
+	var snapshot_text = _snapshot_text(snapshot_dict)
+	print(snapshot_text)
+	_snapshot_status_label.text = "Full snapshot printed to log"
+	call_deferred("_clear_status_label", 1.5)
+
+func _on_ai_auto_print_toggle() -> void:
+	_auto_print_enabled = not _auto_print_enabled
+	_auto_print_last_ms = 0
+	if _auto_print_button != null:
+		if _auto_print_enabled:
+			_auto_print_button.text = "AUTO-PRINT SNAPSHOT: ON (every %.0fs)" % _auto_print_interval_secs
+		else:
+			_auto_print_button.text = "AUTO-PRINT SNAPSHOT: OFF"
+	_snapshot_status_label.text = "Auto-print to log: " + ("ON" if _auto_print_enabled else "OFF")
 	call_deferred("_clear_status_label", 1.5)
 
 func _on_ai_button_pressed(method_name: String) -> void:

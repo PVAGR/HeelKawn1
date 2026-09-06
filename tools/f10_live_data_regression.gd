@@ -466,6 +466,7 @@ func _run_snapshot_checks() -> void:
 	for method_name in [
 		"_on_ai_overview", "_on_ai_pawns", "_on_ai_work", "_on_ai_civilization",
 		"_on_ai_world", "_on_ai_engine", "_on_ai_anomalies",
+		"_on_ai_print_snapshot_log", "_on_ai_auto_print_toggle",
 	]:
 		if not _menu.has_method(method_name):
 			_fail("missing %s" % method_name)

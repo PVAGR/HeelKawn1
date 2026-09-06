@@ -5725,6 +5725,23 @@ func _phase_job_scan() -> void:
 				if not bool(TechnologySystem.call("can_settle_perform_job_type", settle_center, int(j.type))):
 					return false
 		return true
+	# PERF (P3 claim eager-pass): base_passes is re-evaluated for every (job,
+	# scan) combination across the ~4 claim scans of this decision. Its inputs
+	# (cooldown map, stockpile totals, technology gates, path components, region
+	# scars) are STABLE within one decision — nothing mutates job membership,
+	# materials, or tech gates between scans of a single idle decision — so
+	# compute it once per job id and memoize. The raw closure is captured before
+	# the reassignment so the memoizer never re-enters itself.
+	var _base_passes_raw: Callable = base_passes
+	var base_pass_memo: Dictionary = {}
+	var _memoized_base_passes: Callable = func(j: Job) -> bool:
+		var _jid_b: int = int(j.id)
+		if base_pass_memo.has(_jid_b):
+			return bool(base_pass_memo[_jid_b])
+		var _res_b: bool = bool(_base_passes_raw.call(j))
+		base_pass_memo[_jid_b] = _res_b
+		return _res_b
+	base_passes = _memoized_base_passes
 	# PERF: memoize the full priority_cb result per open job for THIS decision.
 	# The same open jobs are re-scanned by the ~4 claim_next_for calls (matrix /
 	# food / goal / fallback) of this decision, and priority_cb's inputs (job,
@@ -5787,23 +5804,37 @@ func _phase_job_scan() -> void:
 					if j.type != _Job.Type.CARVE_LEDGER_STONE and j.type != _Job.Type.CARVE_KNOWLEDGE_STONE and j.type != _Job.Type.CARVE_GRAVE_MARKER:
 						return false
 					return base_passes.call(j)
-	var profession_bonus: Callable = _get_profession_priority_bonus
 	var _rjp_world = _world
 	var _rjp_cs = ColonySimServices if ColonySimServices != null else null
-	var reactive_bonus: Callable = func(j: Job) -> int:
-		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
-	var job: Job = JobManager.claim_next_for(self, goal_filter, _merge_priority_callbacks(_merge_priority_callbacks(memo_priority_cb, profession_bonus), reactive_bonus))
+	# PERF (P3 claim eager-pass): the full merged score for scan candidates is
+	# recomputed by claim_next_for for every candidate on every scan even though
+	# memo_priority_cb is already memoized — the sum of memo_priority_cb +
+	# profession_bonus + reactive_bonus is created fresh per scan. Memoize the
+	# WHOLE merged score per job id once, used identically by the goal scan and
+	# the fallback scan below (same three components, same order), so both scans
+	# after the first hit a pure O(1) Dictionary lookup per candidate.
+	var merged_bonus_memo: Dictionary = {}
+	var memo_merged_bonus: Callable = func(j: Job) -> int:
+		var _jid_m: int = int(j.id)
+		if merged_bonus_memo.has(_jid_m):
+			return int(merged_bonus_memo[_jid_m])
+		var _merged_val: int = (
+				int(memo_priority_cb.call(j))
+				+ int(_get_profession_priority_bonus(j))
+				+ int(ReactiveJobPriority.bonus_for(j, data, _rjp_world, _rjp_cs))
+		)
+		merged_bonus_memo[_jid_m] = _merged_val
+		return _merged_val
+	var job: Job = JobManager.claim_next_for(self, goal_filter, memo_merged_bonus)
 	if job != null:
 		_begin_job(job)
 		_finish_idle_decision_pipeline(t0)
 		return
 	# GOAL FALLBACK
-	var profession_bonus2: Callable = _get_profession_priority_bonus
-	var _rjp_world2 = _world
-	var _rjp_cs2 = ColonySimServices if ColonySimServices != null else null
-	var reactive_bonus2: Callable = func(j: Job) -> int:
-		return int(ReactiveJobPriority.bonus_for(j, data, _rjp_world2, _rjp_cs2))
-	var job2: Job = JobManager.claim_next_for(self, base_passes, _merge_priority_callbacks(_merge_priority_callbacks(memo_priority_cb, profession_bonus2), reactive_bonus2))
+	# The fallback scan uses base_passes (which is now the memoized eager-pass
+	# wrapper above) and the SAME memoized merged score — no fresh merge wrapper
+	# needs to be built, so the fallback scan is O(visible) lookups too.
+	var job2: Job = JobManager.claim_next_for(self, base_passes, memo_merged_bonus)
 	if job2 != null:
 		_begin_job(job2)
 		if data != null and PawnCommunicationLog != null:

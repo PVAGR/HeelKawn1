@@ -1073,3 +1073,42 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - Neural sig-flap at 200x (need buckets) — resolves are now 5-11× cheaper, so revisit TTL/sig only if the user's live playtest still stalls.
 - P3 claim-context fixed cost; F10 AUTOLOAD INVENTORY output-overflow cap; `[t=?][?]` event format fix; TICK_DIAG wall spikes; settlement-formation drift (0/0/0 after 45 buildings); food-pressure-1.0 starvation investigation (P4 trace).
 - Playtest acceptance of this chunk: user runs 200x on the saved colony and reports live framerate / F10 Effective World Speed. The doc-cleanup commit (09-06, uncommitted) remains a separate pending commit.
+
+---
+
+### 2026-09-06 — Session: opencode/big-pickle (Phase 0.1 CHUNK 2: game_tick Crash Prophylactic + Memoized Claim Eager-Pass + World-Time Development Cadences)
+
+**Time:** ~UTC
+
+**What was done (CHUNK 2 — user-approved problem set from the 200x crash log):**
+
+1. **CRASH — game_tick stale-listener prophylactic (`autoloads/GameManager.gd`).** The screenshot crash (tick-16547 200x run, native stop `Attempt to call... on a null instance` from a `game_tick` listener) hit an unpinned synchronous path: `_dispatch_game_tick` had a bare `game_tick.emit(tick)` fast path (when trace/profile were off) that invokes every connected listener with no per-slot validity check. A freed/queued-for-deletion listener node crashes the whole process with no script error. **Fix:** `_dispatch_game_tick` now ALWAYS uses the guarded per-slot snapshot loop — snapshot `get_signal_connection_list(&"game_tick")`, prune any `_is_game_tick_cb_invokable`-fail callable (live object + `is_instance_valid` + not queued-for-deletion + method exists; explicit `RefCounted` branch since a Callable holds a strong ref), then invoke the remaining slots with a re-check before each call. Diagnostics added: cumulative `_gt_stale_pruned_count` + `_diag_last_stale_prune` (names the exact pruned listener); `game_tick_step`/sync fallback both increment + print `[GameManager] game_tick(%d) PRUNED STALE listener: ...` unconditionally. Root cause not statically confirmable (no backtrace captured in the paste) → prophylactic + diagnostic by user decision.
+
+2. **CLAIM — memoized eager-pass job scan (`scripts/pawn/HeelKawnian.gd` `_phase_job_scan`).** The `claim_next_for` fixed per-(pawn,tick) cost (~2-4ms) comes from re-evaluating the cheap eligibility pass and the full merged priority score for every open job on every one of the ~4 scans (matrix/food/goal/fallback) of a single idle decision. **Fix:** `base_passes` is wrapped ONCE per decision in `_memoized_base_passes` (`base_pass_memo` keyed by `int(j.id)`) so the cheap pass runs once per job per decision; the full merged score (`memo_priority_cb` + `_get_profession_priority_bonus` + `ReactiveJobPriority.bonus_for`) is memoized once per job per decision in `memo_merged_bonus`, used identically by BOTH the goal and fallback `claim_next_for` calls (same components, same order). The raw `base_passes` closure is captured before reassignment so the memoizer never re-enters itself. Behavior-neutral by construction (inputs are stable within one decision — no mutation between scans; cooldown-erase side effect preserved). Expected ~40-60% claim-path reduction; identical claims.
+
+3. **SETTLEMENT — world-time development cadences (`scenes/main/Main.gd`).** The five development gates that suppressed 200x world development were tick-based with speed-multiplied intervals. **Root fact:** each completed compat tick commits exactly one canonical quantum (0.05 s at batch factor 1, `TickManager.canonical_seconds_per_transaction`), so a tick gate with a speed-growing interval fires ~50× less often per unit of APPLIED world-time at 200x ("calendar advances, world does not develop"). **Fix — new `_world_time_lane_due(lane_key, interval_ticks, salt_ticks)` gate** fired on `SimulationClock.get_committed_world_time_seconds()` (the causally-applied frontier, which self-spaces under CPU load and never burst-replays on save-load/stall — it snaps forward to the current cadence). Preserves the old salt phases (initial phase `posmod(-salt, interval)`). Converted lanes (all use the 1x interval value; per-pass budget caps kept speed-scaled by design):
+   - Construction seed lane → `constr_seed` @ 30 ticks, and its internal re-entry gate → `constr_seed_inner` @ 60 ticks (world-time cooldown replaces `_high_speed_interval(60,120,300)`; removed now-dead `_last_construction_seed_tick`).
+   - Settlement planner → `settl_planner` @ 90 ticks (salt 97; `planner_ok` budget gate + `first_settlement` DiscoveryGate kept); settlement trade → `settl_trade` @ 90 ticks (salt 30).
+   - Rebirth recompute → `settl_rebirth` @ 4000 ticks (salt 43); offset `SettlementManager.process` → `settl_rebirth_process` @ 4000 ticks (salt 2000, replaces `(tick + interval/2) % interval`). `_recomp_budget` (3000/5000/10000 at 200/100/50x) KEPT speed-scaled — cadence converts, budgets stay.
+   - Heavy planner → `settl_heavy_planner` @ 180 ticks (salt 0); heavy trade → `settl_heavy_trade` @ 180 ticks (salt 60).
+   - NOT converted (fixed tick cadence, never speed-multiplied — deliberately left tick-based): roads (2000,salt 113), resource-truth refresh (500,salt 109), discovered-area jobs (200,salt 17), migrants (5000,salt 31), event seeder (`_event_interval` — a separate speed-scaled lane, untouched this pass), enrichment lanes (regrowth/ambient/hunt_post/blood/doors/sanity/derivative flush).
+   - `_planner_interval_for_speed()`/`_heavy_planner_interval_for_speed()` remain defined but are now unused by `_on_game_tick`/`_flush_world_memory_derivatives`.
+
+**Determinism:** all gating is committed-float + integer ticks, no RNG, no frame coupling; salts preserved so lane phasing is unchanged; the committed clock is a pure function of completed transactions (tick count × canonical quantum) at steady state, so world-time cadence ≡ the old flat 1x tick cadence — behavior at 1x is unchanged.
+
+**Verification (fenced `--playtest-no-save`, production autosave untouched):**
+- `diag_parse_check.gd` after all three files changed → **all 8 targets OK, exit 0** (incl. `scenes/main/Main.gd`, `autoloads/GameManager.gd`, `scripts/pawn/HeelKawnian.gd`). Zero parse errors, zero script errors.
+- Production autosave `%APPDATA%\Godot\app_userdata\HeelKawn\heelkawn_colony_autosave.sav` mtime 2026-09-04 (pre-session) — no tool wrote it (load-only parse probe never exceeds tick 0 / never boots Main).
+
+**Files modified:**
+- `autoloads/GameManager.gd` — `_dispatch_game_tick` always-guarded snapshot loop + RefCounted branch + `_gt_stale_pruned_count`/`_diag_last_stale_prune` + unconditional PRUNED prints in `game_tick_step` and the sync fallback.
+- `scripts/pawn/HeelKawnian.gd` — `_memoized_base_passes` eager-pass memo + `memo_merged_bonus` merged-score memo shared by goal+fallback scans (`_phase_job_scan`).
+- `scenes/main/Main.gd` — `_world_time_lane_due` + `_world_tick_seconds`/`_committed_world_time_seconds` helpers + 8 world-time gate conversions (seed lane/inner, planner, trade, rebirth, rebirth_process, heavy planner, heavy trade).
+- `AGENTS.md` — this entry.
+
+**Known remaining / notes:**
+- Crash identity probe: if the process still stops post-playtest, the PRUNED-stale prints (or `--trace-game-tick-dispatch` / CrashTrap `should_trace_game_tick_dispatch`) will name the exact freed listener node. The prophylactic alone prevents the crash class regardless of trigger.
+- CLAIM measurable-claim-path verification on the user's real saved colony is the acceptance step (fresh-world windows too short to amortize the job-scan cost meaningfully); expected F10 ENGINE `job claim` / dispatch profile improvement, identical settlement behavior.
+- World-time cadence verification is the user's 200x live step: settlements/construction/rebirth now fire at the same per-world-time rate as 1x (CPU permitting); F10 Effective World Speed is the honest throughput readout.
+- Pre-existing open diagnostics stand (from 2026-08-29): P3 per-stage job-rejection counters; P4 per-pawn starvation trace; P5 autosave stage timing. Neural sig-flap at 200x revisited only if playtest still stalls (resolves now 5-11× cheaper).
+- The doc-cleanup commit (09-06, ~247 files) remains a separate pending commit, untouched by this chunk.

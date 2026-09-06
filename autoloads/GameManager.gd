@@ -59,6 +59,13 @@ var _gt_profile_accum: Dictionary = {}
 var _gt_profile_max: Dictionary = {}
 var _gt_profile_count: int = 0
 
+# --- DIAGNOSTICS: stale-listener pruning telemetry (crash-prophylactic fix) ---
+## Total number of freed / queued-for-deletion / null-object game_tick listeners
+## pruned at dispatch time. A non-zero value proves a stale Callable existed.
+var _gt_stale_pruned_count: int = 0
+## The last pruned Callable's string form (names the exact offending listener).
+var _diag_last_stale_prune: String = ""
+
 ## GDScript has no try/catch for runtime faults. When true, each [signal game_tick] slot is
 ## invoked in order with a console line naming the target — the **last line printed** before
 ## a hard stop identifies the crashing listener. Enable with CLI [code]--game-tick-trace[/code]
@@ -251,6 +258,20 @@ func _is_game_tick_cb_invokable(cb: Callable) -> bool:
 	var obj: Object = cb.get_object()
 	if obj == null:
 		return false
+	# RefCounted targets: a Callable holds a strong reference, so the object stays
+	# alive while connected; is_instance_valid still guards against engine-passed
+	# or externally-refcounted objects that were force-freed (refcount hit zero
+	# through a non-Callable owner). Belt-and-suspenders: explicit branch so a
+	# freed RefCounted is rejected the same way a freed Node is.
+	if obj is RefCounted:
+		if not is_instance_valid(obj):
+			return false
+		var m_rc: StringName = cb.get_method()
+		if m_rc == StringName():
+			return false
+		if not (obj as RefCounted).has_method(m_rc):
+			return false
+		return true
 	if not is_instance_valid(obj):
 		return false
 	if obj is Node and (obj as Node).is_queued_for_deletion():
@@ -328,6 +349,9 @@ func game_tick_step(_tick: int) -> bool:
 	if not _is_game_tick_cb_invokable(cb):
 		if trace_game_tick_dispatch:
 			print("[GameManager] game_tick(%d) prune stale listener %s" % [_gt_pending_tick, _format_game_tick_callable(cb, _gt_pending_index + 1, _gt_pending_slots.size())])
+		_gt_stale_pruned_count += 1
+		_diag_last_stale_prune = str(cb)
+		print("[GameManager] game_tick(%d) PRUNED STALE listener (cumulative=%d): %s" % [_gt_pending_tick, _gt_stale_pruned_count, _diag_last_stale_prune])
 		_prune_stale_game_tick_cb(cb)
 		_gt_pending_slots.pop_at(_gt_pending_index)
 		if _gt_pending_slots.is_empty():
@@ -390,28 +414,13 @@ func game_tick_step(_tick: int) -> bool:
 ## (GDScript cannot try/catch most runtime faults — see [member trace_game_tick_dispatch]).
 ## [CrashTrap] can add tick-1 per-listener ENTER/EXIT when [method CrashTrap.should_trace_game_tick_dispatch] is true.
 func _dispatch_game_tick(tick: int) -> void:
+	## CRASH-PROPHYLACTIC: this synchronous fallback is ALWAYS guarded, never a
+	## bare [code]game_tick.emit(tick)[/code]. A single unpinned emit reaches freed/
+	## queued-for-deletion listeners with no per-slot isolation and crashed the
+	## process with no script error (native stop, tick-16547 200x run).
+	## Every listener is validity-checked immediately before invocation.
 	var ct_slots: bool = CrashTrap.should_trace_game_tick_dispatch(tick)
 	var trace_slots: bool = trace_game_tick_dispatch or ct_slots
-	if not trace_slots and not _gt_profile_enabled:
-		var _gm_t0: int = Time.get_ticks_usec()
-		game_tick.emit(tick)
-		var _gm_elapsed: int = Time.get_ticks_usec() - _gm_t0
-		# DIAGNOSTICS: throttled slow-tick warning for game_tick listeners
-		if _gm_elapsed > _DIAG_GM_SLOW_THRESH_USEC:
-			var now_ms: int = Time.get_ticks_msec()
-			if now_ms - _diag_last_gm_slow_warn_msec >= _DIAG_GM_SLOW_WARN_THROTTLE_MSEC:
-				_diag_last_gm_slow_warn_msec = now_ms
-				var conn_list: Array = get_signal_connection_list(&"game_tick")
-				var listener_count: int = 0
-				for entry in conn_list:
-					if entry is Dictionary:
-						listener_count += 1
-				var speed_str: String = "%sx" % str(game_speed)
-				var cap_val: int = (TickManager._max_ticks_per_frame_for_speed() if TickManager != null and TickManager.has_method("_max_ticks_per_frame_for_speed") else MAX_TICKS_PER_FRAME)
-				print("[GM_DIAG] tick=%d elapsed=%dus listeners=%d speed=%s cap=%d" % [
-					tick, _gm_elapsed, listener_count, speed_str, cap_val
-				])
-		return
 	# Use pre-allocated cache arrays
 	_conns_cache.clear()
 	_slots_cache.clear()
@@ -429,6 +438,9 @@ func _dispatch_game_tick(tick: int) -> void:
 		# synchronous fallback never invokes a freed listener either.
 		if not _is_game_tick_cb_invokable(cb):
 			_prune_stale_game_tick_cb(cb)
+			_gt_stale_pruned_count += 1
+			_diag_last_stale_prune = str(cb)
+			print("[GameManager] game_tick(%d) PRUNED STALE listener: %s" % [tick, str(cb)])
 			continue
 		_slots_cache.append(cb)
 		n += 1

@@ -2908,6 +2908,64 @@ func _is_main_lane_tick(tick: int, interval: int, salt: int = 0) -> bool:
 	return posmod(tick + salt, interval) == 0
 
 
+## ---------------------------------------------------------------------------
+## WORLD-TIME CADENCE GATES (HK-SETTLE-P1)
+##
+## Development lanes (settlement planner / heavy planner / construction seed /
+## rebirth recompute) used to be gated by `_is_main_lane_tick(tick, interval,
+## speed_multiplied)`. Each completed compat tick advances LEGACY_CORE committed
+## world-time by exactly one canonical quantum (0.05 s at every speed, batch
+## factor 1; see TickManager.canonical_seconds_per_transaction), so a *tick*
+## gate whose interval grows with speed fires ~50x less often per unit of
+## APPLIED world time at 200x — the "calendar advances, world does not develop"
+## suppression. These gates instead fire on SimulationClock COMMITTED world
+## time, which only advances when a full transaction has causally applied and
+## which self-spaces under CPU load. Phase salts are preserved so lanes keep
+## their staggered cadence.
+## ---------------------------------------------------------------------------
+## key -> next committed world-time (seconds) the lane is due to fire.
+var _wt_cadence_next: Dictionary = {}
+## Last committed world-time observed across lane gates (detect clock reset).
+var _wt_cadence_last_committed: float = -1.0
+
+## Canonical world-time quantum committed per completed compat tick (batch-aware).
+func _world_tick_seconds() -> float:
+	if TickManager != null and TickManager.has_method("canonical_seconds_per_transaction"):
+		return float(TickManager.canonical_seconds_per_transaction())
+	return 0.05
+
+func _committed_world_time_seconds() -> float:
+	if SimulationClock == null:
+		return 0.0
+	if not SimulationClock.has_method("get_committed_world_time_seconds"):
+		return 0.0
+	return float(SimulationClock.get_committed_world_time_seconds())
+
+## World-time lane gate: fires once per `interval_ticks` of APPLIED committed
+## world-time (salt preserved from `_is_main_lane_tick`). Snaps forward past the
+## committed frontier on save-load / large stalls so the lane never bursts (it
+## resumes at the current cadence instead of replaying missed intervals).
+func _world_time_lane_due(lane_key: String, interval_ticks: int, salt_ticks: int = 0) -> bool:
+	if interval_ticks <= 1:
+		return true
+	var committed: float = _committed_world_time_seconds()
+	if committed < _wt_cadence_last_committed:
+		_wt_cadence_next.clear()
+	_wt_cadence_last_committed = committed
+	if not _wt_cadence_next.has(lane_key):
+		var initial_phase_ticks: int = posmod(-salt_ticks, interval_ticks)
+		_wt_cadence_next[lane_key] = float(initial_phase_ticks) * _world_tick_seconds()
+	var next_due: float = float(_wt_cadence_next[lane_key])
+	var interval_world: float = float(interval_ticks) * _world_tick_seconds()
+	if committed < next_due:
+		return false
+	if committed >= next_due + interval_world:
+		_wt_cadence_next[lane_key] = committed + interval_world
+	else:
+		_wt_cadence_next[lane_key] = next_due + interval_world
+	return true
+
+
 func _tick_budget_exceeded(start_usec: int) -> bool:
 	if TickBudgetManager == null:
 		return false
@@ -3005,12 +3063,7 @@ func _on_game_tick(tick: int) -> void:
 
 	# Settlement construction seeder: post build/cook/plant jobs based on
 	# what each settlement actually needs (beds, walls, hearths, farms, etc.)
-	var _seed_interval: int = CONSTRUCTION_JOB_SEED_INTERVAL_TICKS
-	var _cs_speed: float = GameManager.game_speed if GameManager != null else 1.0
-	if _cs_speed >= 100.0: _seed_interval = 4000
-	elif _cs_speed >= 50.0: _seed_interval = 2000
-	elif _cs_speed >= 26.0: _seed_interval = 1000
-	if _is_main_lane_tick(tick, _seed_interval, 11):
+	if _world_time_lane_due("constr_seed", CONSTRUCTION_JOB_SEED_INTERVAL_TICKS, 11):
 		t0 = Time.get_ticks_usec()
 		_seed_construction_jobs(tick_budget_start_usec)
 		section_us["construction_seed"] = Time.get_ticks_usec() - t0
@@ -3185,10 +3238,10 @@ func _on_game_tick(tick: int) -> void:
 		# Planning every tick at 1x causes severe frame-time spikes in large worlds.
 		# Keep planning frequent, but not per-tick. AGGRESSIVE OPTIMIZATION: Longer intervals
 		# DORMANT WORLD: Skip settlement-dependent systems until first settlement forms
-		var planner_interval: int = _planner_interval_for_speed()
+		var planner_interval: int = 90  # 1x planner cadence, in compat ticks
 		# Budget gate: if last planner pass was too slow, defer this one to spread the load
 		var planner_ok: bool = _last_planner_us < _planner_budget_gate_us
-		if _is_main_lane_tick(tick, planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement") and planner_ok:
+		if _world_time_lane_due("settl_planner", planner_interval, 97) and DiscoveryGate.is_unlocked("first_settlement") and planner_ok:
 			t0 = Time.get_ticks_usec()
 			SettlementManager.plan(_world, self, false)
 			_last_planner_us = Time.get_ticks_usec() - t0
@@ -3203,12 +3256,11 @@ func _on_game_tick(tick: int) -> void:
 			SettlementMemory.refresh_resource_truth()
 		# Spread heavy planning across adjacent ticks to reduce one-tick hitch spikes.
 		# DORMANT WORLD: Trade planner only runs after first trade route
-		var trade_offset: int = maxi(1, planner_interval / 3)
 		var trade_ok: bool = DiscoveryGate != null and (
 				DiscoveryGate.is_unlocked("first_trade")
 				or DiscoveryGate.is_unlocked("first_settlement")
 				or (SettlementMemory != null and SettlementMemory.get_proto_sites().size() >= 2))
-		if _is_main_lane_tick(tick, planner_interval, trade_offset) and trade_ok:
+		if _world_time_lane_due("settl_trade", planner_interval, maxi(1, planner_interval / 3)) and trade_ok:
 			t0 = Time.get_ticks_usec()
 			EconomyManager.plan_trade_routes(_world, self, false)
 			section_us["trade_planner"] = Time.get_ticks_usec() - t0
@@ -3219,11 +3271,7 @@ func _on_game_tick(tick: int) -> void:
 		# AGGRESSIVE OPTIMIZATION: Throttle at high speeds to reduce 40-60ms spikes
 		var _rebirth_interval: int = REBIRTH_CHECK_INTERVAL_TICKS
 		var _cur_speed: float = GameManager.game_speed if GameManager != null else 1.0
-		if _cur_speed >= 200.0: _rebirth_interval = 12000
-		elif _cur_speed >= 100.0: _rebirth_interval = 8000
-		elif _cur_speed >= 50.0: _rebirth_interval = 5000
-		elif _cur_speed >= 26.0: _rebirth_interval = 3000
-		if _is_main_lane_tick(tick, _rebirth_interval, 43):
+		if _world_time_lane_due("settl_rebirth", _rebirth_interval, 43):
 			t0 = Time.get_ticks_usec()
 			var _recomp_budget: int = -1
 			if _cur_speed >= 200.0: _recomp_budget = 3000
@@ -3237,8 +3285,7 @@ func _on_game_tick(tick: int) -> void:
 		_resolve_pending_skirmishes(tick)
 
 		# Offset SettlementManager.process to a different tick to spread the load
-		var rebirth_offset_tick: int = (tick + _rebirth_interval / 2) % _rebirth_interval
-		if rebirth_offset_tick == 0:
+		if _world_time_lane_due("settl_rebirth_process", _rebirth_interval, _rebirth_interval / 2):
 			t0 = Time.get_ticks_usec()
 			SettlementManager.process(_world, self, false)
 			section_us["rebirth_recompute"] = Time.get_ticks_usec() - t0
@@ -3574,11 +3621,11 @@ func _flush_world_memory_derivatives() -> void:
 			_world.refresh_terrain_scar_tint()
 			_world.apply_ruins_from_persistence()
 	)
-	var heavy_planner_interval: int = _heavy_planner_interval_for_speed()
-	if GameManager.tick_count % heavy_planner_interval == 0:
+	var heavy_planner_interval: int = 180  # 1x heavy planner cadence, in compat ticks
+	if _world_time_lane_due("settl_heavy_planner", heavy_planner_interval, 0):
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
 			SettlementManager.plan(_world, self, true)
-	if (GameManager.tick_count + maxi(1, heavy_planner_interval / 3)) % heavy_planner_interval == 0:
+	if _world_time_lane_due("settl_heavy_trade", heavy_planner_interval, maxi(1, heavy_planner_interval / 3)):
 		if Time.get_ticks_usec() - flush_start <= FLUSH_BUDGET_USEC:
 			EconomyManager.plan_trade_routes(_world, self, true)
 	MemoryManager.flush_dirty_tiles(_world)
@@ -6848,7 +6895,6 @@ const _SKIRMISH_BATTLE_PLANS: Array = [
 	"hold_the_line", "flank_at_dawn", "shield_wall", "feint_and_charge",
 ]
 var _pending_skirmishes: Array[Dictionary] = []
-var _last_construction_seed_tick: int = -10000
 var _nav_dirty: bool = false  # batched nav notification for construction seed
 var _construction_seed_posts_since_log: int = 0
 var _last_construction_seed_log_tick: int = -10000
@@ -7280,10 +7326,8 @@ func _seed_construction_jobs(frame_start_usec: int = -1) -> void:
 		return
 	if frame_start_usec >= 0 and _tick_budget_exceeded(frame_start_usec):
 		return
-	var interval: int = _high_speed_interval(60, 120, 300)
-	if tick - _last_construction_seed_tick < interval:
+	if not _world_time_lane_due("constr_seed_inner", 60, 0):
 		return
-	_last_construction_seed_tick = tick
 	# Speed-aware budget: tight at high speed to avoid lag spikes
 	var _budget_speed: float = GameManager.game_speed if GameManager != null else 1.0
 	var budget_usec: int = 999999999

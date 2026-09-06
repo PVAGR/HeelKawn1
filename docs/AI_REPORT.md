@@ -85,3 +85,34 @@ Not touched: need-bucket sig stride (deferred fidelity risk), neural cache TTL, 
 ### Next (open)
 - Neural sig-flap at 200x (need buckets) — now less punishing since resolves are 5-11× cheaper; revisit TTL/sig only if playtest still stalls.
 - P3 claim-context fixed cost; F10 AUTOLOAD INVENTORY overflow cap; `[t=?][?]` event format; TICK_DIAG wall spikes; settlement formation drift.
+
+---
+
+## CHUNK 2 (commit) — Crash Prophylactic + Memoized Claim Eager-Pass + World-Time Development Cadences
+
+Three independent fixes from the user-approved problem set (200x crash log), parse-validated.
+
+### CRASH — `game_tick` stale-listener prophylactic (`autoloads/GameManager.gd`)
+- Pre-existing: `_dispatch_game_tick` had a bare `game_tick.emit(tick)` fast path (when trace/profile were off) that invoked every connected listener with no per-slot validity check → freed/queued-for-deletion listener = native stop, no script error (tick-16547 200x run).
+- `_dispatch_game_tick` now ALWAYS uses the guarded per-slot snapshot loop: `get_signal_connection_list`, prune `_is_game_tick_cb_invokable`-fail callables (live object + `is_instance_valid` + not-queued + method exists; explicit `RefCounted` branch — a Callable holds a strong ref so its object never frees through the Callable, but external force-free patterns are still caught), re-check before each invocation.
+- New diagnostics: `_gt_stale_pruned_count` / `_diag_last_stale_prune`; both `game_tick_step` and the sync fallback print `[GameManager] game_tick(%d) PRUNED STALE listener: %s` unconditionally when pruning fires.
+
+### CLAIM — memoized eager-pass job scan (`scripts/pawn/HeelKawnian.gd` `_phase_job_scan`)
+- The ~4 `claim_next_for` scans of one idle decision each re-ran the cheap eligibility pass AND the full merged score for every open job (the fixed ~2-4ms claim-context cost).
+- `base_passes` wrapped per decision in `_memoized_base_passes` (`base_pass_memo` per `int(j.id)`, raw closure captured before reassignment so the memoizer never re-enters itself). The full merged score (`memo_priority_cb` + profession bonus + `ReactiveJobPriority.bonus_for`) is memoized once per job in `memo_merged_bonus` and shared by BOTH the goal and fallback `claim_next_for` calls (same components, same order — identical results). Cooldown-erase side effect preserved.
+- Expected ~40-60% claim-path reduction; identical claimed jobs.
+
+### SETTLEMENT — world-time development cadences (`scenes/main/Main.gd`)
+- Root fact: 1 completed compat tick = 1 canonical quantum of committed world-time (0.05 s at batch factor 1). A tick gate whose interval grows with speed (planner 5000/seed 4000/rebirth 12000 at 200x) fires ~50x less often per unit of APPLIED world-time → "calendar advances, world does not develop".
+- New `_world_time_lane_due(lane_key, interval_ticks, salt_ticks)` gate fires on `SimulationClock.get_committed_world_time_seconds()` — causally-applied frontier, self-spacing under CPU load, snap-forward (no burst) on load/stall. Phase salts preserved (initial phase `posmod(-salt, interval)`). 1x behavior unchanged (world-time cadence ≡ flat tick cadence at steady state).
+- Converted (1x interval): `constr_seed` 30, `constr_seed_inner` 60, `settl_planner` 90 (salt 97), `settl_trade` 90 (salt 30), `settl_rebirth` 4000 (salt 43), `settl_rebirth_process` 4000 (salt = interval/2), `settl_heavy_planner` 180, `settl_heavy_trade` 180 (salt 60). Budget caps kept speed-scaled (`planner_ok`, `_recomp_budget` 3000/5000/10000, seed budget_usec). `_planner_interval_for_speed`/`_heavy_planner_interval_for_speed` now unused by the live paths.
+- Deliberately left tick-based: roads (2000,113), resource-truth (500,109), discovered-area jobs (200,17), migrants (5000,31), event seeder, enrichment lanes.
+
+### Verification (fenced `--playtest-no-save`, production autosave untouched)
+- `diag_parse_check.gd` → **all 8 targets OK, exit 0** (CreatorDebugMenu, HeelKawnian, PawnNeuralNetwork, SettlementMemory, Main, ColonySimServices, f10 regression, save_fence). Zero parse errors / zero script errors.
+- Load-only parse probe never exceeded tick 0 / never booted Main; production autosave mtime 2026-09-04 (pre-session), SHA-256 `2B184F3A4E44B65A7AB783EA41F09D71F894EC453B5B1E348F76A93560A82FF3` unchanged.
+
+### Expected user-visible effect / acceptance
+- Crash class eliminated regardless of trigger; if any stop remains, PRUNED-stale prints name the exact freed listener (`--trace-game-tick-dispatch` adds per-slot tracing).
+- Claim path faster on the mature colony (F10 ENGINE / dispatch profile); identical claims.
+- 200x development cadence now matches 1x per world-time for the converted lanes (CPU permitting); F10 Effective World Speed is the honest throughput readout.

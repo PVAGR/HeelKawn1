@@ -3,6 +3,7 @@ extends SceneTree
 const TARGETS := [
 	"res://scripts/ui/CreatorDebugMenu.gd",
 	"res://scripts/pawn/HeelKawnian.gd",
+	"res://scripts/pawn/PawnNeuralNetwork.gd",
 	"res://autoloads/SettlementMemory.gd",
 	"res://scenes/main/Main.gd",
 	"res://autoloads/ColonySimServices.gd",

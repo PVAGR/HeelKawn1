@@ -1,7 +1,7 @@
 # HEELKAWN — AGENT OPERATING MANUAL
 
 **Single source of truth for all AI agents working on HeelKawn.**
-**Last Updated: 2026-08-18**
+**Last Updated: 2026-09-06**
 
 ---
 
@@ -9,8 +9,10 @@
 
 1. Source code and Godot runtime (highest truth)
 2. This file — kernel philosophy and operational rules
-3. `docs/lore/` — game canon and metaphysics
-4. `docs/archive/` — historical session notes, not authority
+3. `docs/lore/` + `docs/WORLD_BIBLE/` — game canon and metaphysics
+4. `docs/PHASE_TRACKER.md` — 0.1 → 1.0 plan and current position
+5. `docs/HEELKAWN_STATE.md` — current working state
+6. Historical notes (docs were pruned 2026-09-06) — not authority
 
 ---
 
@@ -995,3 +997,79 @@ ow_tick), never float-based; all RNG stays in WorldRNG named streams (the new wa
 - P2/P1 are the large untested cross-cuts the user accepted ("Implement both, static-only"). The movement lane rewrite and the batched quantum both need the user's live playtest: 200× colony development cadence, pawn visual-vs-tile alignment, arrival/WORKING transitions, and the committed-calendar day advance.
 - OPEN after this pass (carried): per-stage job-rejection counters (P3-2026-08-29), per-pawn starvation trace (P4-2026-08-29), autosave stage timing (P5-2026-08-29). The frame-coupled `_process` movement determinism gap is now materially reduced by P2 (tile truth is sim-lane-committed), though the visual `position` interpolation remains frame-driven by design.
 - Working tree junk retained untracked (`.aider.*`, `.godot/**`, `.letta/`, stray shell-output word files); only the intended source files + the new probe tool + AGENTS.md were staged/committed.
+
+---
+
+### 2026-09-06 — Session: opencode/big-pickle (Markdown Cleanup + Phase Tracker for 0.1 → 1.0)
+
+**Time:** ~UTC
+
+**What was done:**
+
+1. **Deleted the obsolete markdown set** (user-confirmed cleanup). Removed:
+   - `docs/archive/` (whole directory — ~110 files of historical session notes, non-authority)
+   - `brain/` (whole stale AI-collaboration directory)
+   - `memory/` (whole directory)
+   - `logs/` (whole directory, incl. `logs/observer/*` and `logs/session.md`)
+   - root `session-ses_*.md` (19 session transcript files)
+   - `docs/STATE_VERIFICATION_2026-*.md` (18 historical verification reports)
+   - `AI_CODER_*.md`, `AI_README.md`, `CANONICAL_MAP.md` (superseded by AGENTS.md consolidation)
+   - `TODO.md`, `TASKS.md` (superseded by the new phase tracker)
+   - `.aider.chat.history.md`
+   - KEPT: AGENTS.md, canon (`docs/lore/` + `docs/WORLD_BIBLE/`), root HEELKAWN_KERNEL/BIBLE/STATE files, and all implementation-reference docs.
+
+2. **NEW living phase tracker: `docs/PHASE_TRACKER.md`.** Single plan for 0.1 → 1.0: version roadmap (0.1 Foundations & Diagnosis → 0.2 High-Speed Parity → 0.3 Content Depth → 0.4 Player Meaning Layer → 0.5 Hardening → 1.0 Release), per-phase goals and exit criteria, carried open items, and a changelog. Replaces TODO.md/TASKS.md as the forward plan; AGENTS.md progress log remains the historical record.
+
+3. **Fixed stale references to deleted docs across the tree:**
+   - `README.md` — read order now `AGENTS.md → docs/HEELKAWN_STATE.md → docs/PHASE_TRACKER.md → docs/lore/`
+   - `docs/HEELKAWN_STATE.md` — header (Last Updated 2026-09-06, current phase → PHASE_TRACKER), AI-agent read order + truth hierarchy rewritten to AGENTS.md first, removed dead `STATE_VERIFICATION` snapshot pointer and stale `brain/memory`/TASKS/TODO references
+   - `docs/BUILD_INVENTORY.md` — handoff step + truth hierarchy updated to AGENTS.md/PHASE_TRACKER
+   - `docs/HEELKAWN_PROJECT_COMPASS.md` — cross-reference/hierarchy rewritten to AGENTS.md-first
+   - `rules/heelkawn-handoff.mdc` — read order rewritten (AGENTS.md first), removed references to deleted archive-context-log/snapshot templates
+   - `AGENTS.md` — header truth-hierarchy updated (archive dir gone), Last Updated 2026-09-06
+
+**Files modified:**
+- `docs/PHASE_TRACKER.md` — NEW phase plan (0.1 → 1.0).
+- `README.md`, `docs/HEELKAWN_STATE.md`, `docs/BUILD_INVENTORY.md`, `docs/HEELKAWN_PROJECT_COMPASS.md`, `rules/heelkawn-handoff.mdc`, `AGENTS.md` — stale reference fixes.
+- Deleted: `docs/archive/`, `brain/`, `memory/`, `logs/`, 19 `session-ses_*.md`, 18 `docs/STATE_VERIFICATION_*.md`, `AI_CODER_*.md` (4), `AI_README.md`, `CANONICAL_MAP.md`, `TODO.md`, `TASKS.md`, `.aider.chat.history.md`.
+
+**Verified:** all edits are documentation-only (no `.gd`/`.tscn`/`project.godot` touched); grep confirmations show zero remaining references to the deleted paths in live docs (residual hits are historical prose, `.aider.cache.db` binary noise, and the now-neutralized `brain/memory` mentions in old STATE sessions which were reworded).
+
+**Known remaining / notes:**
+- `docs/WORLD_BIBLE/*` canonical files (2026-08-17 batch) were left untouched — canonical content is authority; only cross-reference stanzas were updated elsewhere.
+- `docs/HEELKAWN_STATE.md` still carries a long historical reverse-chronology of pre-consolidation sessions; those are kept as evidence, only their dead file refs were fixed.
+- `TESTING_CHECKLIST.md`, `PLAYER_GUIDE.md`, `PLAYTEST_CHECKLIST.md` and other living docs were left in place (referenced by quality workflows); flagged for a 0.5 release-pass truth-audit.
+- Next phase-tracking point: PHASE 0.1 exit requires P3/P4/P5 diagnostics + mid-world F10 colony snapshot on the user's real save.
+
+---
+
+### 2026-09-06 — Session: opencode/big-pickle (Phase 0.1 Start: Neural Forward Exploded Resolution — 5× 200x Resolve Cost Cut)
+
+**Time:** ~UTC
+
+**What was done (CHUNK 1):**
+
+1. **Profiled and root-caused the 200x live-frame cost with hard evidence** (`diag_pawn_profile.gd`, fresh world, 200x, tick 300, fenced). `[NEURAL_CACHE_PROFILE] computes=84 compute_total_us=1,985,594`; `[NEURAL_CACHE_SPLIT] forward_us=1,706,222` (~20.3ms per resolve = **86% of all neural compute**). The per-pawn `PawnNeuralNetwork.forward_propagate` was the hot kernel: O(source×target) with a **String concat + Dictionary.get per synapse** (~6000 allocs/pass). The 2026-09-03 B1 cache (TTL 128) can't help at 200x — need buckets flap every tick (`miss_sig=50/84`).
+
+2. **Behavior-neutral forward optimization** (`scripts/pawn/PawnNeuralNetwork.gd`): lazy per-layer synaptic weight matrix (`_get_forward_matrix`): `matrix[t][s]=sanitized weight`, built from the same `connections` dict with the same conn_id convention; inner loop is now an aligned dot-accumulate with identical source 0..N-1 summation order → **bit-identical float results**. Neuron `value`/`activation` writes + `_store_internal_state` preserved. Cache invalidated on every mutation (`_update_weights`/`_add_neuron_to_layer`/`_prune_weak_connections`/`from_dict`). No change to sig stride, TTL, topology, or any sim/RNG/decision logic.
+
+3. **Equivalence probe** (`tools/diag_nn_forward_equiv.gd`, NEW): reimplements the ORIGINAL algorithm as a reference and compares element-exact `==` across fresh/reuse/backprop/evolve-add/evolve-prune/save-load → **PASS checks=18 failures=0**. Bench speedup **11.5×** (180,227 vs 2,068,913 µs for 300 forwards). Note: probe must `load()` the script inside `_initialize` and avoid compile-time `class_name` (autoloads not registered when the SceneTree script compiles; the direct `connections.erase()` probe variant was removed — that mutation bypasses the invalidation API and is not a code defect).
+
+4. **`tools/diag_parse_check.gd`**: added `PawnNeuralNetwork.gd` to TARGETS (now 8).
+
+5. **Measured end-to-end win** (same 300-tick window, fenced: `--playtest-no-save` + `--profile-pawn-dispatch`):
+   - `dispatch/IDLE` avg **4796 → 1277 us** (total 6.7s → 1,789,496), 3.8×.
+   - Neural compute_total **1,985,594 → 399,823 us (5.0×)**; forward **1,706,222 → 309,273 us (5.5×)**; rule_context 254,920 → 81,663; input_vector 1,813 → 737.
+   - Determinism markers identical: computes=84, hits=258, miss_ttl=10, miss_sig=50, n=1401 → the win is pure per-resolve speed, no decision-count change.
+
+**Files modified:**
+- `scripts/pawn/PawnNeuralNetwork.gd` — matrix-cached forward + `_get_forward_matrix`/`_invalidate_forward_matrices` + 4 invalidation call sites.
+- `tools/diag_nn_forward_equiv.gd` — NEW equivalence/determinism + timing probe.
+- `tools/diag_parse_check.gd` — +PawnNeuralNetwork target.
+- `docs/AI_REPORT.md` — NEW per-commit AI working report (user-mandated workflow), baseline log findings + chunk 1 detail.
+- `AGENTS.md` — this entry.
+
+**Known remaining / next (unchanged plan, now cheaper):**
+- Neural sig-flap at 200x (need buckets) — resolves are now 5-11× cheaper, so revisit TTL/sig only if the user's live playtest still stalls.
+- P3 claim-context fixed cost; F10 AUTOLOAD INVENTORY output-overflow cap; `[t=?][?]` event format fix; TICK_DIAG wall spikes; settlement-formation drift (0/0/0 after 45 buildings); food-pressure-1.0 starvation investigation (P4 trace).
+- Playtest acceptance of this chunk: user runs 200x on the saved colony and reports live framerate / F10 Effective World Speed. The doc-cleanup commit (09-06, uncommitted) remains a separate pending commit.

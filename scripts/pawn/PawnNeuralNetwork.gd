@@ -7,6 +7,7 @@ extends RefCounted
 # Network structure
 var layers: Array = []  # Array of layer dictionaries
 var connections: Dictionary = {}  # connection_id -> {weight, source, target, strength}
+var _forward_matrices: Dictionary = {}  # layer_idx -> target x source weight matrix (forward hot-path cache)
 var activation_functions: Array = ["relu", "sigmoid", "tanh"]
 
 # Learning parameters
@@ -133,37 +134,19 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 		input_activations[i] = in_value
 	current_values = input_activations
 	
-	# Hidden + output layers: O(source*target), direct connection lookup.
+	# Hidden + output layers: O(source), precomputed target x source weight matrix.
 	for layer_idx in range(1, layers.size()):
-		var prev_layer: Dictionary = layers[layer_idx - 1]
 		var layer: Dictionary = layers[layer_idx]
-		var prev_neurons: Array = prev_layer.neurons
 		var layer_neurons: Array = layer.neurons
 		var next_values: Array[float] = []
 		next_values.resize(layer_neurons.size())
-		var prev_layer_name: String = str((prev_neurons[0] as Dictionary).get("id", "")).split("_")[0]
-		var curr_layer_name: String = str((layer_neurons[0] as Dictionary).get("id", "")).split("_")[0]
-		var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
-		var layer_connections: Dictionary = connections.get(connection_key, {})
-		var source_ids: Array[String] = []
-		source_ids.resize(prev_neurons.size())
-		var source_conn_prefixes: Array[String] = []
-		source_conn_prefixes.resize(prev_neurons.size())
-		for source_idx in range(prev_neurons.size()):
-			source_ids[source_idx] = str((prev_neurons[source_idx] as Dictionary).get("id", ""))
-			source_conn_prefixes[source_idx] = source_ids[source_idx] + "_"
-		
+		var matrix: Array = _get_forward_matrix(layer_idx)
 		for neuron_idx in range(layer_neurons.size()):
 			var neuron: Dictionary = layer_neurons[neuron_idx]
 			var neuron_value: float = 0.0
-			var target_id: String = str(neuron.get("id", ""))
-			for source_idx in range(prev_neurons.size()):
-				var conn_id: String = source_conn_prefixes[source_idx] + target_id
-				var conn_v: Variant = layer_connections.get(conn_id, null)
-				if conn_v is Dictionary:
-					var source_value: float = current_values[source_idx]
-					var weight: float = _sanitize_float_fmt((conn_v as Dictionary).get("weight", 0.0), "weight_%s", conn_id, "")
-					neuron_value += source_value * weight
+			var mrow: Array[float] = matrix[neuron_idx]
+			for source_idx in range(mrow.size()):
+				neuron_value += current_values[source_idx] * mrow[source_idx]
 			neuron.activation = _apply_activation(neuron_value, layer_idx)
 			neuron.value = neuron_value
 			next_values[neuron_idx] = _sanitize_float(neuron.activation, "activation_%s" % str(neuron.get("id", "")))
@@ -174,6 +157,44 @@ func forward_propagate(input_data: Array[float]) -> Array[float]:
 	_store_internal_state(current_values)
 	
 	return current_values
+
+
+## Lazy per-layer synaptic weight matrix: matrix[target_idx][source_idx].
+## Built from the SAME `connections` dictionary and the SAME conn_id convention
+## as the old per-pair lookup, in the same source 0..N-1 order, so float math is
+## bit-identical. Avoids ~6000 String allocs + Dictionary.get per forward pass
+## (the measured ~20ms resolve hotspot at 200x). Invalidated whenever weights or
+## topology mutate (_update_weights / _add_neuron_to_layer / _prune_weak_connections).
+func _get_forward_matrix(layer_idx: int) -> Array:
+	var key: int = layer_idx
+	var cached: Variant = _forward_matrices.get(key, null)
+	if cached is Array:
+		return cached
+	var prev_layer: Dictionary = layers[layer_idx - 1]
+	var layer: Dictionary = layers[layer_idx]
+	var prev_neurons: Array = prev_layer.neurons
+	var layer_neurons: Array = layer.neurons
+	var prev_layer_name: String = str((prev_neurons[0] as Dictionary).get("id", "")).split("_")[0]
+	var curr_layer_name: String = str((layer_neurons[0] as Dictionary).get("id", "")).split("_")[0]
+	var connection_key: String = "%s_to_%s" % [prev_layer_name, curr_layer_name]
+	var layer_connections: Dictionary = connections.get(connection_key, {})
+	var matrix: Array = []
+	for target_neuron in layer_neurons:
+		var target_id: String = str((target_neuron as Dictionary).get("id", ""))
+		var row: Array[float] = []
+		row.resize(prev_neurons.size())
+		for source_idx in range(prev_neurons.size()):
+			var conn_id: String = "%s_%s" % [str((prev_neurons[source_idx] as Dictionary).get("id", "")), target_id]
+			var conn_v: Variant = layer_connections.get(conn_id, null)
+			if conn_v is Dictionary:
+				row[source_idx] = _sanitize_float_fmt((conn_v as Dictionary).get("weight", 0.0), "weight_%s", conn_id, "")
+		matrix.append(row)
+	_forward_matrices[key] = matrix
+	return matrix
+
+
+func _invalidate_forward_matrices() -> void:
+	_forward_matrices = {}
 
 
 ## Find neuron index in a layer
@@ -311,6 +332,7 @@ func _update_weights(layer_gradients: Array[Array]) -> void:
 				
 				# Apply weight decay
 				conn.weight *= (1.0 - decay)
+	_invalidate_forward_matrices()
 
 
 ## Store internal state in obfuscated form
@@ -418,6 +440,7 @@ func _add_neuron_to_layer(layer_idx: int) -> void:
 				"strength": 0.5,
 				"velocity": 0.0
 			}
+	_invalidate_forward_matrices()
 
 
 ## Prune weak connections
@@ -434,6 +457,7 @@ func _prune_weak_connections() -> void:
 		
 		for conn_id in to_remove:
 			connections[connection_key].erase(conn_id)
+	_invalidate_forward_matrices()
 
 
 ## Serialize network for save/load
@@ -471,6 +495,7 @@ func _serialize_connections() -> Dictionary:
 
 ## Load network from dictionary
 func from_dict(data: Dictionary) -> void:
+	_invalidate_forward_matrices()
 	layers = data.get("layers", [])
 	_deserialize_connections(data.get("connections", {}))
 	activation_functions = data.get("activation_functions", ["relu", "sigmoid", "tanh"])
